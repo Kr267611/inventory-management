@@ -1,0 +1,222 @@
+/* RESET */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+/* MAIN CONTAINER */
+.auth-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 🔥 LEFT SIDE (BACKGROUND) */
+.auth-left {
+  flex: 1;
+  background: url("https://images.unsplash.com/photo-1581091012184-5c1d8b1f4c44")
+    no-repeat center/cover;
+  position: relative;
+}
+
+/* OVERLAY */
+.overlay {
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 40, 90, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: white;
+  padding: 40px;
+}
+
+/* BRANDING */
+.branding .logo {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: white;
+  color: #1e3c72;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  margin: 0 auto 20px;
+}
+
+.branding h1 {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.branding p {
+  opacity: 0.9;
+  margin-bottom: 30px;
+}
+
+/* FEATURES */
+.features {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* 🔥 RIGHT SIDE */
+.auth-right {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(to right, #eef2f7, #dfe9f3);
+}
+
+/* 🔥 CARD (MAIN BEAUTY) */
+.auth-card {
+  width: 380px;
+  padding: 35px;
+  border-radius: 20px;
+
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(15px);
+
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* 🔥 TABS */
+.tabs {
+  display: flex;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tabs button {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  cursor: pointer;
+  background: #ddd;
+  font-weight: 500;
+}
+
+.tabs .active {
+  background: linear-gradient(to right, #1e3c72, #2a5298);
+  color: white;
+}
+
+/* HEADING */
+.auth-card h2 {
+  text-align: center;
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 14px;
+  color: gray;
+  margin-bottom: 20px;
+}
+
+/* INPUT GROUP */
+.input-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 15px;
+  background: white;
+}
+
+.input-group span {
+  margin-right: 10px;
+  font-size: 18px;
+}
+
+.input-group input {
+  border: none;
+  outline: none;
+  flex: 1;
+  font-size: 14px;
+}
+
+/* EXTRA OPTIONS */
+.extra {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 15px;
+}
+
+.link {
+  color: #2a5298;
+  cursor: pointer;
+}
+
+/* 🔥 MAIN BUTTON */
+.main-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-weight: bold;
+  background: linear-gradient(to right, #1e3c72, #2a5298);
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.main-btn:hover {
+  transform: scale(1.03);
+}
+
+/* DIVIDER */
+.divider {
+  text-align: center;
+  margin: 15px 0;
+  color: gray;
+}
+
+/* SECONDARY BUTTON */
+.secondary-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  background: white;
+  cursor: pointer;
+}
+
+/* 🔥 MOBILE RESPONSIVE */
+@media (max-width: 768px) {
+  .auth-container {
+    flex-direction: column;
+  }
+
+  .auth-left {
+    height: 35%;
+  }
+
+  .auth-right {
+    height: 65%;
+  }
+
+  .card {
+    width: 90%;
+    padding: 20px;
+  }
+
+  .branding h1 {
+    font-size: 22px;
+  }
+
+  .features {
+    flex-wrap: wrap;
+  }
+}
