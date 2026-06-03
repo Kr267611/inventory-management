@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import "./Auth.css";
 import { useNavigate } from "react-router-dom";
+import {api} from "../../Api/api";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -20,55 +21,30 @@ const Auth = () => {
 
   try {
     if (isLogin) {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        })
-      });
+  const data = await api.post("/auth/login", {
+    email: formData.email,
+    password: formData.password,
+  });
 
-      const data = await res.json();
+  localStorage.setItem("token", data.token);
 
-      if (!res.ok) {
-        alert(data.message || "Login failed");
-        return;
-      }
+  alert("Login Successful");
+  navigate("/dashboard");
+}
+ else{
 
-      localStorage.setItem("token", data.token);
+  await api.post("/auth/register", formData);
 
-      alert("Login Successful");
-      navigate("/dashboard");
+alert("Registered Successfully!");
 
-    } else {
-      const res = await fetch("http://localhost:5000/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(formData)
-      });
+setFormData({
+  name: "",
+  email: "",
+  password: ""
+});
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.message || "Registration failed");
-        return;
-      }
-
-      alert("Registered Successfully!");
-
-      setFormData({
-        name: "",
-        email: "",
-        password: ""
-      });
-
-      setIsLogin(true);
-    }
+setIsLogin(true);
+ }
 
   } catch (error) {
     console.log(error);
