@@ -3,7 +3,7 @@ const router = express.Router();
 
 const Inward = require("../models/Inward");
 const Inventory = require("../models/Inventory");
-const Sales = require("../models/tempSales");
+const Sales = require("../models/Sales");
 const Payment = require("../models/Payment");
 
 // 🔥 IMPORT FILTER
