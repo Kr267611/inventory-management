@@ -1,8 +1,11 @@
 // src/api/api.js
 // Generic fetch wrapper — sab API calls yahaan se hoti hain
 
-const BASE_URL = "http://localhost:5000/api";  // backend URL — change as per server
-
+// const BASE_URL = "http://localhost:5000/api";  // backend URL — change as per server
+const BASE_URL =
+  process.env.REACT_APP_API_URL
+    ? `${process.env.REACT_APP_API_URL}/api`
+    : "http://localhost:5000/api";
 /**
  * Internal request function — saare GET/POST/PUT/DELETE iske through chalte hain
  */
