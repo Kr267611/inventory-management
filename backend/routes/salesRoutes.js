@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const Sales = require("../models/Sales");
+const Sales = require("../models/tempSales");
 const Inventory = require("../models/Inventory");
 const PDFDocument = require("pdfkit");
 

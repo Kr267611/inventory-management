@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const Sales = require("../models/Sales");
+const Sales = require("../models/tempSales");
 const Payment = require("../models/Payment");
 
 
