@@ -35,11 +35,13 @@ function Sidebar({ isOpen }) {
         </NavLink>
 
         <NavLink to="/dashboard/payment" className="nav-item">
-  <span className="icon">💳</span>
-  <span className="label">Payment</span>
-</NavLink>
+          <span className="icon">💳</span>
+          <span className="label">Payment</span>
+        </NavLink>
 
-        <NavLink to="/dashboard/reports" className="nav-item"
+        {/* Reports */}
+        <NavLink
+          to="/dashboard/reports"
           className="nav-item dropdown-toggle"
           onClick={() => setReportsOpen(!reportsOpen)}
         >
@@ -50,16 +52,53 @@ function Sidebar({ isOpen }) {
 
         {reportsOpen && (
           <div className="dropdown-menu">
-            <NavLink to="/dashboard/reports/inward-report" className="sub-item">• Inward Report</NavLink>
-            <NavLink to="/dashboard/reports/inventory-report" className="sub-item">• Inventory Report</NavLink>
-            <NavLink to="/dashboard/reports/sales-report" className="sub-item">• Sales Report</NavLink>
-            <NavLink to="/dashboard/reports/payment-report" className="sub-item">• Payment Report</NavLink>
-            <NavLink to="/dashboard/reports/party-wise-report" className="sub-item">• Party-Wise Report</NavLink>
-            <NavLink to="/dashboard/reports/summary-report" className="sub-item">• Summary Report</NavLink>
+            <NavLink
+              to="/dashboard/reports/inward-report"
+              className="sub-item"
+            >
+              • Inward Report
+            </NavLink>
+
+            <NavLink
+              to="/dashboard/reports/inventory-report"
+              className="sub-item"
+            >
+              • Inventory Report
+            </NavLink>
+
+            <NavLink
+              to="/dashboard/reports/sales-report"
+              className="sub-item"
+            >
+              • Sales Report
+            </NavLink>
+
+            <NavLink
+              to="/dashboard/reports/payment-report"
+              className="sub-item"
+            >
+              • Payment Report
+            </NavLink>
+
+            <NavLink
+              to="/dashboard/reports/party-wise-report"
+              className="sub-item"
+            >
+              • Party-Wise Report
+            </NavLink>
+
+            <NavLink
+              to="/dashboard/reports/summary-report"
+              className="sub-item"
+            >
+              • Summary Report
+            </NavLink>
           </div>
         )}
 
-        <NavLink to="/dashboard/masters" className="nav-item"
+        {/* Masters */}
+        <NavLink
+          to="/dashboard/masters"
           className="nav-item dropdown-toggle"
           onClick={() => setMastersOpen(!mastersOpen)}
         >
@@ -70,14 +109,37 @@ function Sidebar({ isOpen }) {
 
         {mastersOpen && (
           <div className="dropdown-menu">
-            <NavLink to="/dashboard/masters/fabric" className="sub-item">• Fabric</NavLink>
-            <NavLink to="/dashboard/masters/quality" className="sub-item">• Quality</NavLink>
-            <NavLink to="/dashboard/masters/design" className="sub-item">• Design</NavLink>
-            <NavLink to="/dashboard/masters/color" className="sub-item">• Color</NavLink>
-            <NavLink to="/dashboard/masters/supplier" className="sub-item">• Supplier</NavLink>
-            <NavLink to="/dashboard/masters/location" className="sub-item">• Location</NavLink>
-            <NavLink to="/dashboard/masters/uom" className="sub-item">• UOM</NavLink>
-            <NavLink to="/dashboard/masters/company" className="sub-item">• Company</NavLink>
+            <NavLink to="/dashboard/masters/fabric" className="sub-item">
+              • Fabric
+            </NavLink>
+
+            <NavLink to="/dashboard/masters/quality" className="sub-item">
+              • Quality
+            </NavLink>
+
+            <NavLink to="/dashboard/masters/design" className="sub-item">
+              • Design
+            </NavLink>
+
+            <NavLink to="/dashboard/masters/color" className="sub-item">
+              • Color
+            </NavLink>
+
+            <NavLink to="/dashboard/masters/supplier" className="sub-item">
+              • Supplier
+            </NavLink>
+
+            <NavLink to="/dashboard/masters/location" className="sub-item">
+              • Location
+            </NavLink>
+
+            <NavLink to="/dashboard/masters/uom" className="sub-item">
+              • UOM
+            </NavLink>
+
+            <NavLink to="/dashboard/masters/company" className="sub-item">
+              • Company
+            </NavLink>
           </div>
         )}
 

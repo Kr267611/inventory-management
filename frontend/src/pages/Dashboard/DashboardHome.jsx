@@ -112,7 +112,7 @@ function DashboardHome() {
               <p className="dashboard-stat-title">{stat.title}</p>
               <h2 className="dashboard-stat-value">{stat.value}</h2>
               {stat.isAlert ? (
-                <a href="#" className="dashboard-stat-link">{stat.change}</a>
+                <a href="/dashboard/inventory" className="dashboard-stat-link">{stat.change}</a>
               ) : (
                 <p className="dashboard-stat-change">
                   <span className="positive">{stat.change}</span> {stat.changeText}

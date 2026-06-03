@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 
 /* ================================================================
    ICONS
@@ -230,7 +230,7 @@ export default function Payment() {
                   <div className="payment-stat__label">{s.label}</div>
                   <div className="payment-stat__value">{fmtINR(s.value)}</div>
                   {s.isLink ? (
-                    <a href="#" className="payment-stat__link">{s.change}</a>
+                    <a href="/dashboard/inventory" className="payment-stat__link">{s.change}</a>
                   ) : (
                     <div className={`payment-stat__change ${s.changeUp ? "is-up" : "is-down"}`}>
                       {s.change} <span className="payment-stat__since">from last month</span>
@@ -346,7 +346,7 @@ export default function Payment() {
                         <span className={`payment-badge payment-badge--${p.status.toLowerCase()}`}>{p.status}</span>
                       </td>
                       <td className="payment-td--center">
-                        <button className="payment-icon-btn" title="View"><Icon.Dots /></button>
+                        <button type="button" className="payment-icon-btn" title="View"><Icon.Dots /></button>
                       </td>
                     </tr>
                   ))}
@@ -414,7 +414,7 @@ export default function Payment() {
                 </div>
               ))}
             </div>
-            <a href="#" className="payment-link">View all customers</a>
+            <a href="/dashboard/customers" className="payment-link">View all customers</a>
           </div>
 
           {/* Recent Overdue */}
@@ -434,7 +434,7 @@ export default function Payment() {
                 </div>
               ))}
             </div>
-            <a href="#" className="payment-link">View all overdue invoices</a>
+            <a href="/dashboard/overdue" className="payment-link">View all overdue invoices</a>
           </div>
         </aside>
       </div>
