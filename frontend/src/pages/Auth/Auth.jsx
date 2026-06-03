@@ -63,12 +63,12 @@ setIsLogin(true);
             <h1>Bhaskar Silk Mills</h1>
             <p>Smart Textile Management System</p>
 
-            <div className="features">
+            {/* <div className="features">
               <div>📦 Inventory</div>
               <div>📊 Sales</div>
               <div>💳 Payments</div>
               <div>📈 Reports</div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

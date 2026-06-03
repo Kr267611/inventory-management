@@ -10,8 +10,8 @@ function Sidebar({ isOpen }) {
     <aside className={`sidebar ${isOpen ? "open" : "closed"}`}>
       <div className="sidebar-logo">
         <div className="logo-box">📦</div>
-        <h2>Bhaskar Silk Mills</h2>
-      </div>
+  <h2>Bhaskar Silk Mills</h2>
+</div>
 
       <nav className="sidebar-nav">
         <NavLink to="/dashboard" end className="nav-item">
