@@ -68,11 +68,11 @@ const EMPTY_FORM = {
   isActive: true,
 };
 
-const formatDate = (iso) => {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-};
+// const formatDate = (iso) => {
+//   if (!iso) return "-";
+//   const d = new Date(iso);
+//   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+// };
 
 const fmtCurrency = (n) =>
   Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
