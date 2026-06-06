@@ -1,93 +1,123 @@
+// models/Sales.js
 const mongoose = require("mongoose");
 
-const salesSchema = new mongoose.Schema({
-
-  salesDate: {
-    type: Date,
-    required: true
-  },
-
-  customer: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Customer",
-    required: true
-  },
-
-  invoiceNo: {
-    type: String,
-    required: true
-  },
-
-  // 🔗 Inventory se link (MOST IMPORTANT)
-  inventory: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Inventory",
-    required: true
-  },
-
-  baleNo: String,
-
-  // 🔥 MASTER SNAPSHOT (copy for safety)
-  fabric: { type: mongoose.Schema.Types.ObjectId, ref: "Fabric" },
+/* ──────── SUB-SCHEMA: Har bechi gayi item ke liye ──────── */
+const saleItemSchema = new mongoose.Schema({
+  // Inventory combo — har item ka apna fabric+quality+color+location
+  fabric:        { type: mongoose.Schema.Types.ObjectId, ref: "Fabric",        required: true },
   fabricQuality: { type: mongoose.Schema.Types.ObjectId, ref: "FabricQuality" },
-  design: { type: mongoose.Schema.Types.ObjectId, ref: "Design" },
-  color: { type: mongoose.Schema.Types.ObjectId, ref: "Color" },
-  container: { type: mongoose.Schema.Types.ObjectId, ref: "Container" },
+  design:        { type: mongoose.Schema.Types.ObjectId, ref: "Design" },
+  color:         { type: mongoose.Schema.Types.ObjectId, ref: "Color" },
+  location:      { type: mongoose.Schema.Types.ObjectId, ref: "Location" },
 
-  uom: { type: mongoose.Schema.Types.ObjectId, ref: "UOM" },
+  // Optional inventory link (audit/traceability ke liye, required nahi)
+  inventoryRef:  { type: mongoose.Schema.Types.ObjectId, ref: "Inventory" },
 
-  // 📦 PCS WISE SELLING
-  onePcsQty: Number,
+  // Quantity / Measurement
+  pcs:           { type: Number, required: true, min: 1 },
+  meterPerPcs:   { type: Number, required: true, min: 0 },
+  totalMeter:    { type: Number, default: 0 },   // pcs * meterPerPcs
 
-  pcsSold: {
-    type: Number,
-    required: true
-  },
+  // Pricing
+  rate:          { type: Number, required: true, min: 0 },  // selling rate per meter
+  discount:      { type: Number, default: 0 },              // discount per meter
+  amount:        { type: Number, default: 0 },              // (totalMeter * rate) - (totalMeter * discount)
+}, { _id: true });
 
-  qty: {
-    type: Number
-  },
 
-  // 💰 Pricing
-  inwardRate: Number,
+/* ──────── MAIN SCHEMA ──────── */
+const salesSchema = new mongoose.Schema({
+  saleDate:  { type: Date, required: true, default: Date.now },
+  invoiceNo: { type: String, required: true, unique: true },
 
-  sellingRate: {
-    type: Number,
-    required: true
-  },
+  // 🔗 Links
+  customer:    { type: mongoose.Schema.Types.ObjectId, ref: "Customer",    required: true },
+  company:     { type: mongoose.Schema.Types.ObjectId, ref: "Company",     required: true },
+  location:    { type: mongoose.Schema.Types.ObjectId, ref: "Location" },     // default location
+  salesPerson: { type: mongoose.Schema.Types.ObjectId, ref: "SalesPerson" },
+  transport:   { type: mongoose.Schema.Types.ObjectId, ref: "Transport" },
 
-  sellingAmount: Number,
-
-  currencyType: {
+  // 🧾 Invoice details
+  gstNo:       { type: String, trim: true },
+  lrNo:        { type: String, trim: true },
+  paymentMode: { type: mongoose.Schema.Types.ObjectId, ref: "PaymentMode" },
+  paymentType: {
     type: String,
-    enum: ["INR", "NGN", "USD"],
-    default: "INR"
+    enum: ["Credit", "Cash", "Advance"],
+    default: "Credit",
+  },
+  dueDate:     Date,
+  remarks:     { type: String, trim: true },
+
+  // 📦 Items
+  items: {
+    type: [saleItemSchema],
+    validate: {
+      validator: (arr) => Array.isArray(arr) && arr.length > 0,
+      message: "Kam se kam ek item hona chahiye",
+    },
   },
 
-  company: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Company",
-    required: true
+  // 💰 Derived totals (pre-save me auto fill)
+  totalPcs:      { type: Number, default: 0 },
+  totalMeter:    { type: Number, default: 0 },
+  grossAmount:   { type: Number, default: 0 },   // before discount
+  discountTotal: { type: Number, default: 0 },
+  netAmount:     { type: Number, default: 0 },   // gross - discount
+
+  // 💵 Payment tracking
+  paidAmount:    { type: Number, default: 0 },
+  balanceDue:    { type: Number, default: 0 },
+  paymentStatus: {
+    type: String,
+    enum: ["Unpaid", "Partial", "Paid"],
+    default: "Unpaid",
   },
 
-  salesPerson: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "SalesPerson"
-  }
+  // 🚦 Sale workflow status
+  status: {
+    type: String,
+    enum: ["Draft", "Confirmed", "Dispatched", "Delivered", "Cancelled"],
+    default: "Confirmed",
+  },
 
+  // Currency
+  currencyType: { type: String, enum: ["INR", "USD", "NGN"], default: "INR" },
+  exchangeRate: { type: Number, default: 1 },
 }, { timestamps: true });
 
 
-// 🔥 AUTO CALCULATION
-salesSchema.pre("save", function () {
+/* ──────── AUTO CALCULATIONS ──────── */
+salesSchema.pre("save", function (next) {
+  let gross = 0, disc = 0, pcsCount = 0, meterTotal = 0;
 
-  // PCS → Qty convert
-  if (this.onePcsQty && this.pcsSold) {
-    this.qty = this.onePcsQty * this.pcsSold;
-  }
+  this.items.forEach((it) => {
+    it.totalMeter = +(it.pcs * it.meterPerPcs).toFixed(2);
+    const lineGross = it.totalMeter * it.rate;
+    const lineDisc  = it.totalMeter * (it.discount || 0);
+    it.amount = +(lineGross - lineDisc).toFixed(2);
 
-  // Amount calculate
-  this.sellingAmount = this.qty * this.sellingRate;
+    gross    += lineGross;
+    disc     += lineDisc;
+    pcsCount += it.pcs;
+    meterTotal += it.totalMeter;
+  });
+
+  this.totalPcs      = pcsCount;
+  this.totalMeter    = +meterTotal.toFixed(2);
+  this.grossAmount   = +gross.toFixed(2);
+  this.discountTotal = +disc.toFixed(2);
+  this.netAmount     = +(gross - disc).toFixed(2);
+
+  // Balance due — only auto-set on first save (paidAmount usually 0 initially)
+  this.balanceDue = Math.max(this.netAmount - (this.paidAmount || 0), 0);
+
+  // Payment status auto
+  if (this.paidAmount === 0) this.paymentStatus = "Unpaid";
+  else if (this.paidAmount >= this.netAmount) this.paymentStatus = "Paid";
+  else this.paymentStatus = "Partial";
+
+  next();
 });
 
 module.exports = mongoose.model("Sales", salesSchema);

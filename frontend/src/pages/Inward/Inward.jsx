@@ -1,6 +1,9 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { inwardApi } from "../../Api/inwardApi";
+import { fetchAllMasters } from "../../Api/masterApi";
 
-/* Inline icons — no external dependency */
+/* Inline icons */
 const Icon = {
   ChevronDown: () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -59,56 +62,101 @@ const Icon = {
   ),
 };
 
+const EMPTY_FORM = {
+  entryDate: new Date().toISOString().slice(0, 10),
+  voucherNo: "",
+  company: "", location: "", supplier: "",
+  fabric: "", fabricQuality: "", design: "", defaultColor: "",
+  uom: "", processType: "",
+  gstNo: "", challanNo: "", invoiceNo: "", hsnCode: "",
+  lrNo: "", transport: "Self", invType: "FRESH GOODS",
+  lotNo: "", rack: "",
+  weight: 0, weaver: "", gsm: "", width: "", remarks: "",
+  currencyType: "INR", rate: 0, exchangeRate: 1,
+};
+
 export default function InwardEntry() {
-  const [form, setForm] = useState({
-    inwardDate: "2026-05-30",
-    voucherNo: "11798",
-    company: "Bhaskar Silk Mills",
-    location: "Godown A",
-    supplier: "FASHION ROYALE",
-    gstNo: "24AAPPA7421C2Z6",
-    challanNo: "195",
-    invoiceNo: "INV-2026-1258",
-    quality: "POLY KNIT BIG",
-    hsnCode: "540710",
-    lrNo: "",
-    transport: "Self",
-    fabric: "GREY FABRIC",
-    design: "-",
-    color: "GREY",
-    processType: "DYEING",
-    invType: "FRESH GOODS",
-    lotNo: "9255",
-    rack: "A",
-    weight: "0.000",
-    weaver: "",
-    gsm: "",
-    width: "",
-    remarks: "",
-    currencyType: "INR",
-    greyRate: "10.00",
-    exchangeRate: "1.00",
-  });
+  const navigate = useNavigate();
+  const { id: editId } = useParams();
 
-  const [pcsDetails, setPcsDetails] = useState([
-    { id: 1, pcsNo: 1, meter: 25.59, color: "GREY" },
-    { id: 2, pcsNo: 2, meter: 25.65, color: "GREY" },
-    { id: 3, pcsNo: 3, meter: 25.62, color: "GREY" },
-    { id: 4, pcsNo: 4, meter: 25.92, color: "GREY" },
-    { id: 5, pcsNo: 5, meter: 25.94, color: "GREY" },
-    { id: 6, pcsNo: 6, meter: 25.17, color: "GREY" },
-    { id: 7, pcsNo: 7, meter: 25.15, color: "GREY" },
-    { id: 8, pcsNo: 8, meter: 25.34, color: "GREY" },
-  ]);
-
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [pcsDetails, setPcsDetails] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({ meter: 0, color: "" });
 
+  const [masters, setMasters] = useState({
+    companies: [], locations: [], suppliers: [],
+    fabrics: [], qualities: [], designs: [], colors: [], uoms: [],
+  });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  /* ──────── FETCH MASTERS + INWARD (if editing) ──────── */
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const m = await fetchAllMasters();
+        setMasters(m);
+
+        // Default selections — pehla option auto-select
+        setForm((f) => ({
+          ...f,
+          company: f.company || m.companies[0]?._id || "",
+          location: f.location || m.locations[0]?._id || "",
+          uom: f.uom || m.uoms[0]?._id || "",
+        }));
+
+        // Agar edit mode hai, existing inward load karo
+        if (editId) {
+          const inw = await inwardApi.getById(editId);
+          setForm({
+            entryDate: inw.entryDate?.slice(0, 10) || "",
+            voucherNo: inw.voucherNo || "",
+            company: inw.company?._id || inw.company || "",
+            location: inw.location?._id || inw.location || "",
+            supplier: inw.supplier?._id || inw.supplier || "",
+            fabric: inw.fabric?._id || inw.fabric || "",
+            fabricQuality: inw.fabricQuality?._id || inw.fabricQuality || "",
+            design: inw.design?._id || inw.design || "",
+            defaultColor: inw.defaultColor?._id || inw.defaultColor || "",
+            uom: inw.uom?._id || inw.uom || "",
+            processType: inw.processType?._id || inw.processType || "",
+            gstNo: inw.gstNo || "", challanNo: inw.challanNo || "",
+            invoiceNo: inw.invoiceNo || "", hsnCode: inw.hsnCode || "",
+            lrNo: inw.lrNo || "", transport: inw.transport || "Self",
+            invType: inw.invType || "FRESH GOODS",
+            lotNo: inw.lotNo || "", rack: inw.rack || "",
+            weight: inw.weight || 0, weaver: inw.weaver || "",
+            gsm: inw.gsm || "", width: inw.width || "",
+            remarks: inw.remarks || "",
+            currencyType: inw.currencyType || "INR",
+            rate: inw.rate || 0, exchangeRate: inw.exchangeRate || 1,
+          });
+          setPcsDetails(
+            (inw.pcsDetails || []).map((p, i) => ({
+              id: p._id || i + 1,
+              pcsNo: p.pcsNo || i + 1,
+              meter: p.meter || 0,
+              color: p.color?._id || p.color || "",
+            }))
+          );
+        }
+      } catch (err) {
+        alert("Data load failed: " + err.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
+  /* ──────── SUMMARY ──────── */
   const summary = useMemo(() => {
     const totalPcs = pcsDetails.length;
     const totalMeter = pcsDetails.reduce((s, p) => s + (parseFloat(p.meter) || 0), 0);
     const avgMeter = totalPcs ? totalMeter / totalPcs : 0;
-    const rate = parseFloat(form.greyRate) || 0;
+    const rate = parseFloat(form.rate) || 0;
     const greyAmount = totalMeter * rate;
     return {
       totalPcs,
@@ -118,23 +166,21 @@ export default function InwardEntry() {
       greyAmount: greyAmount.toFixed(2),
       adjDiff: "0.000",
     };
-  }, [pcsDetails, form.greyRate]);
+  }, [pcsDetails, form.rate]);
 
-  const greyAmountFormatted = useMemo(
-    () => Number(summary.greyAmount).toFixed(2),
-    [summary.greyAmount]
-  );
-
+  /* ──────── HANDLERS ──────── */
   const handle = (field, value) => setForm({ ...form, [field]: value });
 
   const addPcs = () => {
-    const next = {
-      id: Date.now(),
-      pcsNo: pcsDetails.length + 1,
-      meter: 0,
-      color: form.color || "GREY",
-    };
-    setPcsDetails([...pcsDetails, next]);
+    setPcsDetails([
+      ...pcsDetails,
+      {
+        id: Date.now(),
+        pcsNo: pcsDetails.length + 1,
+        meter: 0,
+        color: form.defaultColor || "",
+      },
+    ]);
   };
 
   const deletePcs = (id) => {
@@ -162,16 +208,76 @@ export default function InwardEntry() {
   };
 
   const resetForm = () => {
+    if (!window.confirm("Form aur PCS sab reset ho jaayega. Sure?")) return;
     setPcsDetails([]);
-    setForm({ ...form, voucherNo: "", lotNo: "", remarks: "", weight: "0.000" });
+    setForm({
+      ...EMPTY_FORM,
+      company: masters.companies[0]?._id || "",
+      location: masters.locations[0]?._id || "",
+      uom: masters.uoms[0]?._id || "",
+    });
+    setEditingId(null);
   };
+
+  /* ──────── SAVE / UPDATE ──────── */
+  const handleSave = async () => {
+    if (!form.voucherNo) return alert("Voucher No daalo");
+    if (!form.supplier) return alert("Supplier select karo");
+    if (!form.fabric) return alert("Fabric select karo");
+    if (!form.rate || parseFloat(form.rate) <= 0) return alert("Grey Rate enter karo");
+    if (pcsDetails.length === 0) return alert("Kam se kam ek PCS add karo");
+
+    const payload = {
+      ...form,
+      rate: parseFloat(form.rate) || 0,
+      exchangeRate: parseFloat(form.exchangeRate) || 1,
+      weight: parseFloat(form.weight) || 0,
+      pcsDetails: pcsDetails.map((p, i) => ({
+        pcsNo: i + 1,
+        meter: parseFloat(p.meter) || 0,
+        color: p.color || form.defaultColor || undefined,
+      })),
+    };
+     
+    console.log("Payload to save:", payload);
+    // Empty optional ObjectId fields ko bhejna nahi (warna Mongoose cast error)
+    ["fabricQuality", "design", "defaultColor", "uom", "processType", "container"].forEach((k) => {
+      if (!payload[k]) delete payload[k];
+    });
+
+    try {
+      setSaving(true);
+      if (editId) {
+        await inwardApi.update(editId, payload);
+        alert("Inward updated! Inventory bhi update ho gaya.");
+      } else {
+        await inwardApi.create(payload);
+        alert("Inward saved! Inventory me add ho gaya.");
+      }
+      navigate("/dashboard/inward");
+    } catch (err) {
+      alert("Save failed: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="inward-page">
+        <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
+          Loading...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="inward-page">
       {/* Page header */}
       <div className="inward-page__header">
         <div className="inward-page__title-wrap">
-          <h1 className="inward-page__title">Inward Entry</h1>
+          <h1 className="inward-page__title">{editId ? "Edit Inward Entry" : "Inward Entry"}</h1>
           <div className="inward-breadcrumb">
             <span>Home</span>
             <span className="inward-breadcrumb__sep">/</span>
@@ -179,14 +285,15 @@ export default function InwardEntry() {
           </div>
         </div>
         <div className="inward-page__actions">
-          <button className="inward-btn inward-btn--ghost">
+          <button className="inward-btn inward-btn--ghost" onClick={() => navigate("/dashboard/inward")}>
             <Icon.ArrowLeft /><span>Back to List</span>
           </button>
           <button className="inward-btn inward-btn--ghost" onClick={resetForm}>
             <Icon.Refresh /><span>Reset</span>
           </button>
-          <button className="inward-btn inward-btn--primary">
-            <Icon.Save /><span>Save Inward</span>
+          <button className="inward-btn inward-btn--primary" onClick={handleSave} disabled={saving}>
+            <Icon.Save />
+            <span>{saving ? "Saving..." : (editId ? "Update Inward" : "Save Inward")}</span>
           </button>
         </div>
       </div>
@@ -201,66 +308,100 @@ export default function InwardEntry() {
             <div className="inward-grid">
               <Field label="Inward Date" required>
                 <div className="inward-input-wrap">
-                  <input type="date" className="inward-input" value={form.inwardDate} onChange={(e) => handle("inwardDate", e.target.value)} />
+                  <input type="date" className="inward-input" value={form.entryDate} onChange={(e) => handle("entryDate", e.target.value)} />
                   <span className="inward-input__icon"><Icon.Calendar /></span>
                 </div>
               </Field>
               <Field label="Voucher No" required>
                 <input className="inward-input" value={form.voucherNo} onChange={(e) => handle("voucherNo", e.target.value)} />
               </Field>
+
               <Field label="Company" required>
-                <Select value={form.company} onChange={(v) => handle("company", v)} options={["Bhaskar Silk Mills", "Other Mills"]} />
+                <MasterSelect value={form.company} onChange={(v) => handle("company", v)} options={masters.companies} />
               </Field>
               <Field label="Location" required>
-                <Select value={form.location} onChange={(v) => handle("location", v)} options={["Godown A", "Godown B", "Main Warehouse"]} />
+                <MasterSelect value={form.location} onChange={(v) => handle("location", v)} options={masters.locations} />
               </Field>
 
               <Field label="Supplier / Party" required>
-                <Select value={form.supplier} onChange={(v) => handle("supplier", v)} options={["FASHION ROYALE", "ABC TEXTILES", "XYZ TRADERS"]} />
+                <MasterSelect value={form.supplier} onChange={(v) => handle("supplier", v)} options={masters.suppliers} />
               </Field>
-              <Field label="GST No"><input className="inward-input" value={form.gstNo} onChange={(e) => handle("gstNo", e.target.value)} /></Field>
-              <Field label="Challan No"><input className="inward-input" value={form.challanNo} onChange={(e) => handle("challanNo", e.target.value)} /></Field>
-              <Field label="Invoice / Bill No"><input className="inward-input" value={form.invoiceNo} onChange={(e) => handle("invoiceNo", e.target.value)} /></Field>
+              <Field label="GST No">
+                <input className="inward-input" value={form.gstNo} onChange={(e) => handle("gstNo", e.target.value)} />
+              </Field>
+              <Field label="Challan No">
+                <input className="inward-input" value={form.challanNo} onChange={(e) => handle("challanNo", e.target.value)} />
+              </Field>
+              <Field label="Invoice / Bill No">
+                <input className="inward-input" value={form.invoiceNo} onChange={(e) => handle("invoiceNo", e.target.value)} />
+              </Field>
 
               <Field label="Quality" required>
-                <Select value={form.quality} onChange={(v) => handle("quality", v)} options={["POLY KNIT BIG", "COTTON", "SILK"]} />
+                <MasterSelect value={form.fabricQuality} onChange={(v) => handle("fabricQuality", v)} options={masters.qualities} />
               </Field>
-              <Field label="HSN Code"><input className="inward-input" value={form.hsnCode} onChange={(e) => handle("hsnCode", e.target.value)} /></Field>
-              <Field label="LR No"><input className="inward-input" placeholder="Enter LR No" value={form.lrNo} onChange={(e) => handle("lrNo", e.target.value)} /></Field>
-              <Field label="Transport"><input className="inward-input" value={form.transport} onChange={(e) => handle("transport", e.target.value)} /></Field>
+              <Field label="HSN Code">
+                <input className="inward-input" value={form.hsnCode} onChange={(e) => handle("hsnCode", e.target.value)} />
+              </Field>
+              <Field label="LR No">
+                <input className="inward-input" placeholder="Enter LR No" value={form.lrNo} onChange={(e) => handle("lrNo", e.target.value)} />
+              </Field>
+              <Field label="Transport">
+                <input className="inward-input" value={form.transport} onChange={(e) => handle("transport", e.target.value)} />
+              </Field>
 
               <Field label="Fabric / Item" required>
-                <Select value={form.fabric} onChange={(v) => handle("fabric", v)} options={["GREY FABRIC", "DYED FABRIC", "PRINTED FABRIC"]} />
+                <MasterSelect value={form.fabric} onChange={(v) => handle("fabric", v)} options={masters.fabrics} />
               </Field>
               <Field label="Design">
-                <Select value={form.design} onChange={(v) => handle("design", v)} options={["-", "PLAIN", "PRINTED"]} />
+                <MasterSelect value={form.design} onChange={(v) => handle("design", v)} options={masters.designs} labelKey="designNo" />
               </Field>
-              <Field label="Color"><input className="inward-input" value={form.color} onChange={(e) => handle("color", e.target.value)} /></Field>
+              <Field label="Color">
+                <MasterSelect value={form.defaultColor} onChange={(v) => handle("defaultColor", v)} options={masters.colors} />
+              </Field>
               <Field label="Process Type">
-                <Select value={form.processType} onChange={(v) => handle("processType", v)} options={["DYEING", "PRINTING", "FINISHING"]} />
+                <Select value={form.processType} onChange={(v) => handle("processType", v)} options={["", "DYEING", "PRINTING", "FINISHING"]} />
               </Field>
 
-              <Field label="Inv. Type"><input className="inward-input" value={form.invType} onChange={(e) => handle("invType", e.target.value)} /></Field>
-              <Field label="Lot No" required><input className="inward-input" value={form.lotNo} onChange={(e) => handle("lotNo", e.target.value)} /></Field>
-              <Field label="Rack"><input className="inward-input" value={form.rack} onChange={(e) => handle("rack", e.target.value)} /></Field>
-              <Field label="Weight (KG)"><input className="inward-input" type="number" step="0.001" value={form.weight} onChange={(e) => handle("weight", e.target.value)} /></Field>
+              <Field label="Inv. Type">
+                <input className="inward-input" value={form.invType} onChange={(e) => handle("invType", e.target.value)} />
+              </Field>
+              <Field label="Lot No" required>
+                <input className="inward-input" value={form.lotNo} onChange={(e) => handle("lotNo", e.target.value)} />
+              </Field>
+              <Field label="Rack">
+                <input className="inward-input" value={form.rack} onChange={(e) => handle("rack", e.target.value)} />
+              </Field>
+              <Field label="Weight (KG)">
+                <input className="inward-input" type="number" step="0.001" value={form.weight} onChange={(e) => handle("weight", e.target.value)} />
+              </Field>
 
-              <Field label="Weaver"><input className="inward-input" value={form.weaver} onChange={(e) => handle("weaver", e.target.value)} /></Field>
-              <Field label="GSM"><input className="inward-input" value={form.gsm} onChange={(e) => handle("gsm", e.target.value)} /></Field>
-              <Field label="Width"><input className="inward-input" value={form.width} onChange={(e) => handle("width", e.target.value)} /></Field>
-              <Field label="Remarks"><input className="inward-input" value={form.remarks} onChange={(e) => handle("remarks", e.target.value)} /></Field>
+              <Field label="Weaver">
+                <input className="inward-input" value={form.weaver} onChange={(e) => handle("weaver", e.target.value)} />
+              </Field>
+              <Field label="GSM">
+                <input className="inward-input" value={form.gsm} onChange={(e) => handle("gsm", e.target.value)} />
+              </Field>
+              <Field label="Width">
+                <input className="inward-input" value={form.width} onChange={(e) => handle("width", e.target.value)} />
+              </Field>
+              <Field label="UOM">
+                <MasterSelect value={form.uom} onChange={(v) => handle("uom", v)} options={masters.uoms} />
+              </Field>
 
+              <Field label="Remarks">
+                <input className="inward-input" value={form.remarks} onChange={(e) => handle("remarks", e.target.value)} />
+              </Field>
               <Field label="Currency Type">
                 <Select value={form.currencyType} onChange={(v) => handle("currencyType", v)} options={["INR", "USD", "NGN"]} />
               </Field>
-              <Field label="Grey Rate (Per Mtr)">
-                <input className="inward-input" type="number" step="0.01" value={form.greyRate} onChange={(e) => handle("greyRate", e.target.value)} />
+              <Field label="Grey Rate (Per Mtr)" required>
+                <input className="inward-input" type="number" step="0.01" value={form.rate} onChange={(e) => handle("rate", e.target.value)} />
               </Field>
               <Field label="Exchange Rate">
                 <input className="inward-input" type="number" step="0.01" value={form.exchangeRate} onChange={(e) => handle("exchangeRate", e.target.value)} />
               </Field>
               <Field label="Grey Amount">
-                <input className="inward-input inward-input--readonly" readOnly value={greyAmountFormatted} />
+                <input className="inward-input inward-input--readonly" readOnly value={Number(summary.greyAmount).toFixed(2)} />
               </Field>
             </div>
           </section>
@@ -296,41 +437,51 @@ export default function InwardEntry() {
                       <td className="inward-td inward-td--empty" colSpan="4">No PCS added yet. Click "Add PCS" to start.</td>
                     </tr>
                   )}
-                  {pcsDetails.map((row) => (
-                    <tr key={row.id} className="inward-tr">
-                      <td className="inward-td inward-td--center">{row.pcsNo}</td>
-                      <td className="inward-td inward-td--center">
-                        {editingId === row.id ? (
-                          <input className="inward-input inward-input--inline" type="number" step="0.01" value={editDraft.meter} onChange={(e) => setEditDraft({ ...editDraft, meter: e.target.value })} />
-                        ) : (
-                          row.meter.toFixed(2)
-                        )}
-                      </td>
-                      <td className="inward-td inward-td--center">
-                        {editingId === row.id ? (
-                          <input className="inward-input inward-input--inline" value={editDraft.color} onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })} />
-                        ) : (
-                          <span className="inward-chip">{row.color}</span>
-                        )}
-                      </td>
-                      <td className="inward-td inward-td--center">
-                        <div className="inward-actions">
+                  {pcsDetails.map((row) => {
+                    const colorName = masters.colors.find((c) => c._id === row.color)?.name || "-";
+                    return (
+                      <tr key={row.id} className="inward-tr">
+                        <td className="inward-td inward-td--center">{row.pcsNo}</td>
+                        <td className="inward-td inward-td--center">
                           {editingId === row.id ? (
-                            <button className="inward-icon-action inward-icon-action--save" onClick={() => saveEdit(row.id)} title="Save">
-                              <Icon.Check />
-                            </button>
+                            <input className="inward-input inward-input--inline" type="number" step="0.01"
+                              value={editDraft.meter}
+                              onChange={(e) => setEditDraft({ ...editDraft, meter: e.target.value })} />
                           ) : (
-                            <button className="inward-icon-action inward-icon-action--edit" onClick={() => startEdit(row)} title="Edit">
-                              <Icon.Edit />
-                            </button>
+                            Number(row.meter).toFixed(2)
                           )}
-                          <button className="inward-icon-action inward-icon-action--delete" onClick={() => deletePcs(row.id)} title="Delete">
-                            <Icon.Trash />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="inward-td inward-td--center">
+                          {editingId === row.id ? (
+                            <select className="inward-input inward-input--inline"
+                              value={editDraft.color}
+                              onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })}>
+                              <option value="">-</option>
+                              {masters.colors.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+                            </select>
+                          ) : (
+                            <span className="inward-chip">{colorName}</span>
+                          )}
+                        </td>
+                        <td className="inward-td inward-td--center">
+                          <div className="inward-actions">
+                            {editingId === row.id ? (
+                              <button className="inward-icon-action inward-icon-action--save" onClick={() => saveEdit(row.id)} title="Save">
+                                <Icon.Check />
+                              </button>
+                            ) : (
+                              <button className="inward-icon-action inward-icon-action--edit" onClick={() => startEdit(row)} title="Edit">
+                                <Icon.Edit />
+                              </button>
+                            )}
+                            <button className="inward-icon-action inward-icon-action--delete" onClick={() => deletePcs(row.id)} title="Delete">
+                              <Icon.Trash />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -364,7 +515,6 @@ export default function InwardEntry() {
       <style>{`
         .inward-page, .inward-page * { box-sizing: border-box; }
         .inward-page {
-          --inw-bg: transparent;
           --inw-card: #ffffff;
           --inw-border: #e5e7eb;
           --inw-text: #0f172a;
@@ -378,13 +528,9 @@ export default function InwardEntry() {
           --inw-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           color: var(--inw-text);
-          // padding: 24px;
-          // font-size: 14px;
-          // line-height: 1.4;
         }
         .inward-page svg { width: 18px; height: 18px; display: block; }
 
-        /* Page header */
         .inward-page__header {
           display: flex; align-items: flex-start; justify-content: space-between;
           gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
@@ -395,88 +541,65 @@ export default function InwardEntry() {
         .inward-breadcrumb__current { color: var(--inw-primary); font-weight: 500; }
         .inward-page__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-        /* Buttons */
         .inward-btn {
           display: inline-flex; align-items: center; gap: 8px;
-          padding: 9px 16px;
-          border-radius: 8px;
+          padding: 9px 16px; border-radius: 8px;
           font-size: 14px; font-weight: 500;
-          cursor: pointer;
-          border: 1px solid transparent;
-          transition: all 0.15s;
-          background: #fff;
+          cursor: pointer; border: 1px solid transparent;
+          transition: all 0.15s; background: #fff;
           font-family: inherit;
         }
+        .inward-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .inward-btn--ghost { background: #fff; border-color: var(--inw-border); color: var(--inw-text); }
         .inward-btn--ghost:hover { background: #f8fafc; border-color: #cbd5e1; }
         .inward-btn--primary { background: var(--inw-primary); color: #fff; border-color: var(--inw-primary); }
-        .inward-btn--primary:hover { background: var(--inw-primary-hover); }
+        .inward-btn--primary:hover:not(:disabled) { background: var(--inw-primary-hover); }
         .inward-btn--sm { padding: 7px 12px; font-size: 13px; }
 
-        /* Layout grid */
         .inward-content {
-          display: grid;
-          grid-template-columns: 1fr 320px;
-          gap: 20px;
-          align-items: flex-start;
+          display: grid; grid-template-columns: 1fr 320px;
+          gap: 20px; align-items: flex-start;
         }
         .inward-content__left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         .inward-content__right { display: flex; flex-direction: column; gap: 20px; }
 
-        /* Card */
         .inward-card {
           background: var(--inw-card);
           border: 1px solid var(--inw-border);
-          border-radius: 12px;
-          padding: 20px;
+          border-radius: 12px; padding: 20px;
           box-shadow: var(--inw-shadow);
         }
         .inward-card__title { font-size: 16px; font-weight: 600; margin: 0 0 18px 0; }
         .inward-card__title--inline { margin: 0; }
 
-        /* Form grid */
         .inward-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 24px;
-}
+          display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px 24px;
+        }
         .inward-field {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.inward-field__label {
-  flex: 0 0 120px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--inw-label);
-  line-height: 1.25;
-}
-.inward-field__required { color: var(--inw-danger); margin-left: 2px; }
+          display: flex; flex-direction: row; align-items: center;
+          gap: 10px; min-width: 0;
+        }
+        .inward-field__label {
+          flex: 0 0 130px;
+          font-size: 13px; font-weight: 500;
+          color: var(--inw-label); line-height: 1.25;
+        }
+        .inward-field__required { color: var(--inw-danger); margin-left: 2px; }
+        .inward-field > :not(.inward-field__label) {
+          flex: 1 1 auto; min-width: 0;
+        }
 
-/* Input/select/wrapper takes remaining space */
-.inward-field > :not(.inward-field__label) {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-        /* Inputs */
         .inward-input, .inward-select {
-          width: 100%;
-          padding: 9px 12px;
+          width: 100%; padding: 9px 12px;
           border: 1px solid var(--inw-input-border);
-          border-radius: 8px;
-          background: #fff;
-          font-size: 14px;
-          color: var(--inw-text);
+          border-radius: 8px; background: #fff;
+          font-size: 14px; color: var(--inw-text);
           transition: border-color 0.15s, box-shadow 0.15s;
           font-family: inherit;
         }
         .inward-input:focus, .inward-select:focus {
-          outline: none;
-          border-color: var(--inw-primary);
+          outline: none; border-color: var(--inw-primary);
           box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
         }
         .inward-input::placeholder { color: #94a3b8; }
@@ -485,21 +608,18 @@ export default function InwardEntry() {
         .inward-input-wrap .inward-input { padding-right: 36px; }
         .inward-input__icon {
           position: absolute; right: 10px; top: 50%;
-          transform: translateY(-50%);
-          color: var(--inw-muted);
+          transform: translateY(-50%); color: var(--inw-muted);
           pointer-events: none;
         }
         .inward-select-wrap { position: relative; }
         .inward-select { appearance: none; -webkit-appearance: none; padding-right: 36px; cursor: pointer; }
         .inward-select-wrap__chev {
           position: absolute; right: 10px; top: 50%;
-          transform: translateY(-50%);
-          color: var(--inw-muted);
+          transform: translateY(-50%); color: var(--inw-muted);
           pointer-events: none;
         }
-        .inward-input--inline { padding: 6px 10px; font-size: 13px; max-width: 120px; margin: 0 auto; }
+        .inward-input--inline { padding: 6px 10px; font-size: 13px; max-width: 140px; margin: 0 auto; }
 
-        /* PCS section */
         .inward-pcs-header {
           display: flex; align-items: flex-start; justify-content: space-between;
           gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
@@ -510,42 +630,33 @@ export default function InwardEntry() {
         }
         .inward-pcs-hint svg { width: 14px; height: 14px; }
 
-        /* Table */
         .inward-table-wrap { overflow-x: auto; border: 1px solid var(--inw-border); border-radius: 8px; }
         .inward-table { width: 100%; border-collapse: collapse; min-width: 480px; }
         .inward-th {
-          background: #f8fafc;
-          padding: 12px 16px;
+          background: #f8fafc; padding: 12px 16px;
           font-size: 13px; font-weight: 600;
-          color: var(--inw-label);
-          text-align: left;
+          color: var(--inw-label); text-align: left;
           border-bottom: 1px solid var(--inw-border);
         }
         .inward-th--center, .inward-td--center { text-align: center; }
         .inward-td {
-          padding: 12px 16px;
-          font-size: 14px;
+          padding: 12px 16px; font-size: 14px;
           border-bottom: 1px solid var(--inw-border);
         }
         .inward-tr:last-child .inward-td { border-bottom: none; }
         .inward-tr:hover { background: #fafbfc; }
         .inward-td--empty { text-align: center; color: var(--inw-muted); padding: 32px; }
         .inward-chip {
-          display: inline-block;
-          padding: 4px 12px;
-          background: #f1f5f9;
-          border-radius: 12px;
-          font-size: 12px;
-          font-weight: 500;
-          color: var(--inw-label);
+          display: inline-block; padding: 4px 12px;
+          background: #f1f5f9; border-radius: 12px;
+          font-size: 12px; font-weight: 500; color: var(--inw-label);
         }
         .inward-actions { display: inline-flex; gap: 6px; justify-content: center; }
         .inward-icon-action {
           width: 30px; height: 30px;
-          border-radius: 6px;
-          border: 1px solid transparent;
-          cursor: pointer;
-          display: inline-flex; align-items: center; justify-content: center;
+          border-radius: 6px; border: 1px solid transparent;
+          cursor: pointer; display: inline-flex;
+          align-items: center; justify-content: center;
           transition: all 0.15s;
         }
         .inward-icon-action svg { width: 14px; height: 14px; }
@@ -556,27 +667,18 @@ export default function InwardEntry() {
         .inward-icon-action--save { background: #d1fae5; color: var(--inw-success); }
         .inward-icon-action--save:hover { background: #a7f3d0; }
 
-        /* Summary */
         .inward-summary-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 12px;
-          margin-bottom: 12px;
+          display: grid; grid-template-columns: repeat(2, 1fr);
+          gap: 12px; margin-bottom: 12px;
         }
         .inward-summary-box {
-          background: #f8fafc;
-          border: 1px solid var(--inw-border);
-          border-radius: 10px;
-          padding: 14px;
+          background: #f8fafc; border: 1px solid var(--inw-border);
+          border-radius: 10px; padding: 14px;
         }
         .inward-summary-box__label { font-size: 12px; color: var(--inw-muted); margin-bottom: 6px; }
         .inward-summary-box__value { font-size: 20px; font-weight: 700; color: var(--inw-text); }
 
-        .inward-highlight {
-          border-radius: 10px;
-          padding: 16px;
-          margin-top: 12px;
-        }
+        .inward-highlight { border-radius: 10px; padding: 16px; margin-top: 12px; }
         .inward-highlight--blue { background: #eff6ff; border: 1px solid #bfdbfe; }
         .inward-highlight--blue .inward-highlight__value { color: var(--inw-primary); }
         .inward-highlight--green { background: #ecfdf5; border: 1px solid #a7f3d0; }
@@ -584,46 +686,36 @@ export default function InwardEntry() {
         .inward-highlight__label { font-size: 13px; color: var(--inw-label); margin-bottom: 6px; font-weight: 500; }
         .inward-highlight__value { font-size: 22px; font-weight: 700; }
 
-        /* Responsive */
-        /* Wider screens — 3 columns inline */
-@media (min-width: 1500px) {
-  .inward-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-/* Stack right summary below */
-@media (max-width: 1200px) {
-  .inward-content { grid-template-columns: 1fr; }
-  .inward-content__right { order: -1; }
-  .inward-summary-grid { grid-template-columns: repeat(4, 1fr); }
-}
-
-@media (max-width: 900px) {
-  .inward-grid { grid-template-columns: 1fr; }
-  .inward-summary-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* Mobile — labels back on top of inputs for readability */
-@media (max-width: 640px) {
-  .inward-page__title { font-size: 20px; }
-  .inward-field {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-  }
-  .inward-field__label { flex: none; }
-}
-
-@media (max-width: 560px) {
-  .inward-summary-grid { grid-template-columns: 1fr 1fr; }
-  .inward-page__actions { width: 100%; }
-  .inward-page__actions .inward-btn { flex: 1; justify-content: center; }
-}
+        @media (min-width: 1500px) {
+          .inward-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (max-width: 1200px) {
+          .inward-content { grid-template-columns: 1fr; }
+          .inward-content__right { order: -1; }
+          .inward-summary-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        @media (max-width: 900px) {
+          .inward-grid { grid-template-columns: 1fr; }
+          .inward-summary-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 640px) {
+          .inward-page__title { font-size: 20px; }
+          .inward-field {
+            flex-direction: column; align-items: stretch; gap: 6px;
+          }
+          .inward-field__label { flex: none; }
+        }
+        @media (max-width: 560px) {
+          .inward-summary-grid { grid-template-columns: 1fr 1fr; }
+          .inward-page__actions { width: 100%; }
+          .inward-page__actions .inward-btn { flex: 1; justify-content: center; }
+        }
       `}</style>
     </div>
   );
 }
 
-/* Helpers */
+/* ──────── HELPERS ──────── */
 function Field({ label, required, children }) {
   return (
     <div className="inward-field">
@@ -636,12 +728,28 @@ function Field({ label, required, children }) {
   );
 }
 
+/* For static string options like Currency, Process Type */
 function Select({ value, onChange, options }) {
   return (
     <div className="inward-select-wrap">
       <select className="inward-select" value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((opt) => (
-          <option key={opt} value={opt}>{opt}</option>
+          <option key={opt} value={opt}>{opt || "Select..."}</option>
+        ))}
+      </select>
+      <span className="inward-select-wrap__chev"><Icon.ChevronDown /></span>
+    </div>
+  );
+}
+
+/* For master data objects with _id + name */
+function MasterSelect({ value, onChange, options = [] ,labelKey = "name"}) {
+  return (
+    <div className="inward-select-wrap">
+      <select className="inward-select" value={value || ""} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Select...</option>
+        {options.map((opt) => (
+          <option key={opt._id} value={opt._id}>{opt[labelKey]}</option>
         ))}
       </select>
       <span className="inward-select-wrap__chev"><Icon.ChevronDown /></span>

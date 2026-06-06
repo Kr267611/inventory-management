@@ -1,117 +1,40 @@
 const mongoose = require("mongoose");
 
-const inventorySchema = new mongoose.Schema({
+const inventorySchema = new mongoose.Schema(
+  {
+    // 🔑 COMPOSITE KEY — ye 4 combine se ek unique inventory record banta hai
+    fabric:        { type: mongoose.Schema.Types.ObjectId, ref: "Fabric",        required: true },
+    fabricQuality: { type: mongoose.Schema.Types.ObjectId, ref: "FabricQuality" },
+    color:         { type: mongoose.Schema.Types.ObjectId, ref: "Color" },
+    location:      { type: mongoose.Schema.Types.ObjectId, ref: "Location" },
 
-  inward: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Inward",
-    required: true,
-    unique: true // 🔥 prevent duplicate
+    // 📊 AGGREGATED STOCK
+    totalPcs:    { type: Number, default: 0 },   // Available PCS (taka)
+    totalMeter:  { type: Number, default: 0 },   // Available meters
+    avgRate:     { type: Number, default: 0 },   // Weighted avg rate
+    totalValue:  { type: Number, default: 0 },   // totalMeter * avgRate
+
+    // 🎚 STOCK THRESHOLDS (for Low Stock / Out of Stock badges)
+    minStockPcs: { type: Number, default: 5 },
+
+    // 🔗 Source tracking
+    inwards: [{ type: mongoose.Schema.Types.ObjectId, ref: "Inward" }],
   },
+  { timestamps: true }
+);
 
-  baleNo: {
-    type: String,
-    required: true,
-    unique: true
-  },
+// Unique combo
+inventorySchema.index(
+  { fabric: 1, fabricQuality: 1, color: 1, location: 1 },
+  { unique: true }
+);
 
-  fabric: { type: mongoose.Schema.Types.ObjectId, ref: "Fabric" },
-  fabricQuality: { type: mongoose.Schema.Types.ObjectId, ref: "FabricQuality" },
-  design: { type: mongoose.Schema.Types.ObjectId, ref: "Design" },
-  color: { type: mongoose.Schema.Types.ObjectId, ref: "Color" },
-  supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
-
-  container: { type: mongoose.Schema.Types.ObjectId, ref: "Container" },
-
-  uom: { type: mongoose.Schema.Types.ObjectId, ref: "UOM" },
-  location: { type: mongoose.Schema.Types.ObjectId, ref: "Location" },
-
-  company: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Company",
-    required: true
-  },
-
-  onePcsQty: Number,
-
-  pcs: {
-    type: Number,
-    default: 0
-  },
-
-  qty: {
-    type: Number,
-    required: true
-  },
-
-  saleQty: {
-    type: Number,
-    default: 0
-  },
-  // 📏 Measurements
-meter: {
-  type: Number,
-  default: 0
-},
-
-sqMeter: {
-  type: Number,
-  default: 0
-},
-
-// ⚖️ Weight
-grossWeight: {
-  type: Number,
-  default: 0
-},
-
-netWeight: {
-  type: Number,
-  default: 0
-},
-
-// 💰 Financial
-currencyType: {
-  type: String,
-  enum: ["INR", "NGN", "USD"],
-  default: "INR"
-},
-
-rate: {
-  type: Number,
-  default: 0
-},
-
-totalAmount: {
-  type: Number
-},
-
-  balanceQty: Number
-
-}, { timestamps: true });
-
-
-// 🔥 Auto calculation
-inventorySchema.pre("save", function () {
-  this.balanceQty = this.qty - this.saleQty;
-  if(this.onePcsQty && this.qty) {
-    this.pcs = this.onePcsQty * this.qty;
-  }
+// 🔥 HELPER: Stock status compute karne ke liye
+inventorySchema.virtual("status").get(function () {
+  if (this.totalPcs <= 0) return "Out of Stock";
+  if (this.totalPcs <= this.minStockPcs) return "Low Stock";
+  return "In Stock";
 });
-
-inventorySchema.pre("findOneAndUpdate", function (next) {
-  const update = this.getUpdate();
-
-  if (update.qty !== undefined || update.saleQty !== undefined || update.rate !== undefined) {
-    const qty = update.qty ?? this._update.qty;
-    const saleQty = update.saleQty ?? this._update.saleQty ?? 0;
-    const rate = update.rate ?? this._update.rate ?? 0;
-
-    update.balanceQty = qty - saleQty;
-    update.totalAmount = qty * rate;
-  }
-
-  next();
-});
+inventorySchema.set("toJSON", { virtuals: true });
 
 module.exports = mongoose.model("Inventory", inventorySchema);

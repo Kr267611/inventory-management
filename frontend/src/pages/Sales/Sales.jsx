@@ -1,7 +1,11 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { salesApi } from "../../Api/sales";
+import { inventoryApi } from "../../Api/inventoryApi";
+import { fetchAllMasters } from "../../Api/masterApi";
 
 /* ================================================================
-   ICONS
+   ICONS (same as before)
    ================================================================ */
 const Icon = {
   ArrowLeft: () => (
@@ -56,27 +60,32 @@ const Icon = {
   ),
 };
 
-/* ================================================================
-   MOCK DATA
-   ================================================================ */
-const CUSTOMERS = ["MILON TEXTILES", "RIYA BOUTIQUE", "SHIVAM TRADERS", "OM FABRICS", "ABC EXPORTS"];
-const LOCATIONS = ["Godown A", "Godown B"];
-const TRANSPORTS = ["Self", "Courier", "Goods Transport"];
-const PAYMENT_TYPES = ["Credit", "Cash", "NEFT", "UPI", "Cheque"];
-const SALES_PERSONS = ["Rajesh Kumar", "Suresh Patel", "Amit Sharma"];
-const FABRICS = ["GREY FABRIC", "BLUE FABRIC", "BLACK FABRIC", "WHITE FABRIC", "NAVY FABRIC", "RED FABRIC"];
-const QUALITIES = ["POLY KNIT BIG", "COTTON", "SILK"];
-const COLORS = ["GREY", "BLUE", "BLACK", "WHITE", "NAVY", "RED", "GREEN", "YELLOW"];
+const PAYMENT_TYPES = ["Credit", "Cash", "Advance"];
 
-const fmt = (n) => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const EMPTY_FORM = {
+  saleDate: new Date().toISOString().slice(0, 10),
+  invoiceNo: "",
+  customer: "",
+  company: "",
+  location: "",
+  transport: "",
+  lrNo: "",
+  gstNo: "",
+  paymentType: "Credit",
+  paymentMode: "",
+  dueDate: "",
+  salesPerson: "",
+  remarks: "",
+};
 
 const EMPTY_ITEM = {
-  fabric: "GREY FABRIC",
-  quality: "POLY KNIT BIG",
-  color: "GREY",
+  fabric: "",
+  fabricQuality: "",
+  color: "",
   pcs: "",
   meterPerPcs: "",
-  availablePcs: 6,
   rate: "",
   discount: "0",
 };
@@ -85,87 +94,161 @@ const EMPTY_ITEM = {
    MAIN
    ================================================================ */
 export default function Sales() {
-  const [form, setForm] = useState({
-    saleDate: "2026-05-30",
-    invoiceNo: "SAL-2026-125",
-    customer: "MILON TEXTILES",
-    location: "Godown A",
-    transport: "Self",
-    lrNo: "",
-    gstNo: "24AAPPX1234C1Z6",
-    paymentType: "Credit",
-    dueDate: "2026-06-15",
-    salesPerson: "Rajesh Kumar",
-    remarks: "",
-  });
+  const navigate = useNavigate();
+  const { id: editId } = useParams();
 
-  const [itemForm, setItemForm] = useState({
-    fabric: "GREY FABRIC",
-    quality: "POLY KNIT BIG",
-    color: "GREY",
-    pcs: "2",
-    meterPerPcs: "25.59",
-    availablePcs: 6,
-    rate: "95.00",
-    discount: "0",
-  });
-
-  // Start with the sample row matching the image
-  const [items, setItems] = useState([
-    {
-      id: 1,
-      fabric: "GREY FABRIC",
-      quality: "POLY KNIT BIG",
-      color: "GREY",
-      pcs: 2,
-      meterPerPcs: 25.59,
-      totalMeter: 51.18,
-      rate: 95.0,
-      discount: 0,
-      amount: 4864.2,
-    },
-  ]);
-
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [itemForm, setItemForm] = useState(EMPTY_ITEM);
+  const [items, setItems] = useState([]);
   const [editingId, setEditingId] = useState(null);
+
+  const [masters, setMasters] = useState({
+    customers: [], companies: [], locations: [], fabrics: [],
+    qualities: [], colors: [], salesPersons: [], transports: [],
+    paymentModes: [],
+  });
+
+  const [availablePcs, setAvailablePcs] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const setF = (k, v) => setForm({ ...form, [k]: v });
   const setIf = (k, v) => setItemForm({ ...itemForm, [k]: v });
 
-  // Live calculation in item form
+  /* ──────── LOAD MASTERS (and existing sale if editing) ──────── */
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const m = await fetchAllMasters();
+        console.log("masters:", m);
+        console.log("salespersons:", m.salespersons);
+        setMasters({
+          customers:    m.customers || [],
+          companies:    m.companies || [],
+          locations:    m.locations || [],
+          fabrics:      m.fabrics || [],
+          qualities:    m.qualities || [],
+          colors:       m.colors || [],
+          salesPersons: m.salespersons || [],
+          transports:   m.transports || [],
+          paymentModes: m.paymentModes || [],
+        });
+
+        // Defaults
+        setForm((f) => ({
+          ...f,
+          company:  f.company  || m.companies?.[0]?._id || "",
+          location: f.location || m.locations?.[0]?._id || "",
+        }));
+
+        // Load existing sale if /sales/:id route
+        if (editId) {
+          const sale = await salesApi.getById(editId);
+          setForm({
+            saleDate: sale.saleDate?.slice(0, 10) || "",
+            invoiceNo: sale.invoiceNo || "",
+            customer: sale.customer?._id || sale.customer || "",
+            company:  sale.company?._id  || sale.company  || "",
+            location: sale.location?._id || sale.location || "",
+            transport: sale.transport?._id || sale.transport || "",
+            lrNo: sale.lrNo || "",
+            gstNo: sale.gstNo || "",
+            paymentType: sale.paymentType || "Credit",
+            paymentMode: sale.paymentMode?._id || sale.paymentMode || "",
+            dueDate: sale.dueDate?.slice(0, 10) || "",
+            salesPerson: sale.salesPerson?._id || sale.salesPerson || "",
+            remarks: sale.remarks || "",
+          });
+          setItems(
+            (sale.items || []).map((it, idx) => ({
+              id: it._id || idx + 1,
+              fabric: it.fabric?._id || it.fabric,
+              fabricQuality: it.fabricQuality?._id || it.fabricQuality,
+              color: it.color?._id || it.color,
+              location: it.location?._id || it.location,
+              pcs: it.pcs,
+              meterPerPcs: it.meterPerPcs,
+              totalMeter: it.totalMeter,
+              rate: it.rate,
+              discount: it.discount,
+              amount: it.amount,
+            }))
+          );
+        }
+      } catch (err) {
+        alert("Load failed: " + err.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
+  /* ──────── CHECK STOCK whenever combo changes ──────── */
+  useEffect(() => {
+    (async () => {
+      if (!itemForm.fabric || !form.location) {
+        setAvailablePcs(0);
+        return;
+      }
+      try {
+        const result = await inventoryApi.checkStock({
+          fabric: itemForm.fabric,
+          fabricQuality: itemForm.fabricQuality,
+          color: itemForm.color,
+          location: form.location,
+        });
+        setAvailablePcs(result.totalPcs || 0);
+      } catch {
+        setAvailablePcs(0);
+      }
+    })();
+  }, [itemForm.fabric, itemForm.fabricQuality, itemForm.color, form.location]);
+
+  /* ──────── AUTO-FILL customer GST when customer changes ──────── */
+  useEffect(() => {
+    if (!form.customer) return;
+    const cust = masters.customers.find((c) => c._id === form.customer);
+    if (cust?.gstNo) setForm((f) => ({ ...f, gstNo: cust.gstNo }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.customer]);
+
+  /* ──────── LIVE CALCULATIONS ──────── */
   const itemAmount = useMemo(() => {
     const pcs = parseFloat(itemForm.pcs) || 0;
-    const m = parseFloat(itemForm.meterPerPcs) || 0;
-    const r = parseFloat(itemForm.rate) || 0;
-    const d = parseFloat(itemForm.discount) || 0;
+    const m   = parseFloat(itemForm.meterPerPcs) || 0;
+    const r   = parseFloat(itemForm.rate) || 0;
+    const d   = parseFloat(itemForm.discount) || 0;
     const totalMeter = pcs * m;
     return Math.max(totalMeter * r - totalMeter * d, 0);
   }, [itemForm]);
 
-  // Summary calculations
   const summary = useMemo(() => {
-    const totalPcs = items.reduce((s, it) => s + (it.pcs || 0), 0);
+    const totalPcs   = items.reduce((s, it) => s + (it.pcs || 0), 0);
     const totalMeter = items.reduce((s, it) => s + (it.totalMeter || 0), 0);
     const grossAmount = items.reduce((s, it) => s + it.totalMeter * it.rate, 0);
     const discountTotal = items.reduce((s, it) => s + it.totalMeter * it.discount, 0);
     const netAmount = grossAmount - discountTotal;
     const avgMeter = totalPcs ? totalMeter / totalPcs : 0;
-    const avgRate = totalMeter ? grossAmount / totalMeter : 0;
+    const avgRate  = totalMeter ? grossAmount / totalMeter : 0;
     return { totalPcs, totalMeter, avgMeter, avgRate, grossAmount, discountTotal, netAmount };
   }, [items]);
 
+  /* ──────── ITEM HANDLERS ──────── */
   const handleAddItem = () => {
     const pcs = parseFloat(itemForm.pcs);
     const meterPerPcs = parseFloat(itemForm.meterPerPcs);
     const rate = parseFloat(itemForm.rate);
     const discount = parseFloat(itemForm.discount) || 0;
 
-    if (!pcs || !meterPerPcs || !rate) {
-      alert("PCS, Meter (Per PCS) aur Rate fill karo");
-      return;
-    }
-    if (pcs > itemForm.availablePcs) {
-      alert(`Sirf ${itemForm.availablePcs} PCS available hain stock me`);
-      return;
+    if (!itemForm.fabric) return alert("Fabric select karo");
+    if (!pcs || pcs < 1) return alert("PCS enter karo");
+    if (!meterPerPcs) return alert("Meter (Per PCS) enter karo");
+    if (!rate) return alert("Rate enter karo");
+
+    if (pcs > availablePcs) {
+      return alert(`Sirf ${availablePcs} PCS available hain stock me`);
     }
 
     const totalMeter = pcs * meterPerPcs;
@@ -174,8 +257,9 @@ export default function Sales() {
     const newRow = {
       id: editingId ?? Date.now(),
       fabric: itemForm.fabric,
-      quality: itemForm.quality,
+      fabricQuality: itemForm.fabricQuality,
       color: itemForm.color,
+      location: form.location,    // har item ka location = main form location
       pcs,
       meterPerPcs,
       totalMeter,
@@ -190,52 +274,115 @@ export default function Sales() {
     } else {
       setItems([...items, newRow]);
     }
-    setItemForm({ ...EMPTY_ITEM, availablePcs: 6 });
+    setItemForm(EMPTY_ITEM);
   };
 
-  const handleEdit = (row) => {
+  const handleEditItem = (row) => {
     setEditingId(row.id);
     setItemForm({
       fabric: row.fabric,
-      quality: row.quality,
+      fabricQuality: row.fabricQuality,
       color: row.color,
       pcs: String(row.pcs),
       meterPerPcs: String(row.meterPerPcs),
-      availablePcs: 6,
       rate: String(row.rate),
       discount: String(row.discount),
     });
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm("Item delete karna hai?")) {
-      setItems(items.filter((it) => it.id !== id));
-      if (editingId === id) setEditingId(null);
+  const handleDeleteItem = (id) => {
+    if (!window.confirm("Item delete karna hai?")) return;
+    setItems(items.filter((it) => it.id !== id));
+    if (editingId === id) {
+      setEditingId(null);
+      setItemForm(EMPTY_ITEM);
     }
   };
 
   const handleReset = () => {
     if (!window.confirm("Saare items aur form reset ho jaayenge. Sure?")) return;
     setItems([]);
-    setItemForm({ ...EMPTY_ITEM, availablePcs: 6 });
+    setItemForm(EMPTY_ITEM);
     setEditingId(null);
-    setForm({ ...form, lrNo: "", remarks: "" });
+    setForm({
+      ...EMPTY_FORM,
+      company:  masters.companies[0]?._id || "",
+      location: masters.locations[0]?._id || "",
+    });
   };
 
-  const handleSave = () => {
-    if (items.length === 0) {
-      alert("Kam se kam ek item add karo");
-      return;
+  /* ──────── SAVE (API) ──────── */
+  const handleSave = async () => {
+    if (!form.invoiceNo.trim()) return alert("Invoice No daalo");
+    if (!form.customer) return alert("Customer select karo");
+    if (!form.company)  return alert("Company select karo");
+    if (items.length === 0) return alert("Kam se kam ek item add karo");
+
+    const payload = {
+      saleDate: form.saleDate,
+      invoiceNo: form.invoiceNo,
+      customer: form.customer,
+      company: form.company,
+      location: form.location || undefined,
+      salesPerson: form.salesPerson || undefined,
+      transport: form.transport || undefined,
+      paymentMode: form.paymentMode || undefined,
+      gstNo: form.gstNo,
+      lrNo: form.lrNo,
+      paymentType: form.paymentType,
+      dueDate: form.dueDate || undefined,
+      remarks: form.remarks,
+      items: items.map((it) => ({
+        fabric: it.fabric,
+        fabricQuality: it.fabricQuality || undefined,
+        color: it.color || undefined,
+        location: it.location || form.location || undefined,
+        pcs: Number(it.pcs),
+        meterPerPcs: Number(it.meterPerPcs),
+        rate: Number(it.rate),
+        discount: Number(it.discount) || 0,
+      })),
+    };
+
+    // Clean undefined keys
+    Object.keys(payload).forEach((k) => {
+      if (payload[k] === undefined || payload[k] === "") delete payload[k];
+    });
+
+    try {
+      setSaving(true);
+      if (editId) {
+        await salesApi.update(editId, payload);
+        alert("Sale updated! Inventory bhi update ho gaya.");
+      } else {
+        await salesApi.create(payload);
+        alert("Sale created! Inventory me se stock ghat gaya.");
+      }
+      navigate("/dashboard/sales");
+    } catch (err) {
+      alert("Save failed: " + err.message);
+    } finally {
+      setSaving(false);
     }
-    alert("Sales saved (mock).\n\n" + JSON.stringify({ ...form, items, summary }, null, 2));
   };
+
+  /* ──────── HELPERS for name lookup in table ──────── */
+  const nameOf = (list, id) => list.find((x) => x._id === id)?.name || "-";
+
+  if (loading) {
+    return (
+      <div className="sales-page" style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="sales-page">
       {/* HEADER */}
       <div className="sales-page__header">
         <div>
-          <h1 className="sales-page__title">Sales Entry</h1>
+          <h1 className="sales-page__title">{editId ? "Edit Sales Entry" : "Sales Entry"}</h1>
           <div className="sales-breadcrumb">
             <span>Home</span>
             <span className="sales-breadcrumb__sep">/</span>
@@ -243,14 +390,14 @@ export default function Sales() {
           </div>
         </div>
         <div className="sales-page__actions">
-          <button className="sales-btn sales-btn--ghost" onClick={() => alert("Back to List (mock)")}>
+          <button className="sales-btn sales-btn--ghost" onClick={() => navigate("/dashboard/sales")}>
             <Icon.ArrowLeft /><span>Back to List</span>
           </button>
           <button className="sales-btn sales-btn--ghost" onClick={handleReset}>
             <Icon.Refresh /><span>Reset</span>
           </button>
-          <button className="sales-btn sales-btn--primary" onClick={handleSave}>
-            <Icon.Save /><span>Save Sales</span>
+          <button className="sales-btn sales-btn--primary" onClick={handleSave} disabled={saving}>
+            <Icon.Save /><span>{saving ? "Saving..." : (editId ? "Update Sale" : "Save Sale")}</span>
           </button>
         </div>
       </div>
@@ -269,35 +416,39 @@ export default function Sales() {
                 </div>
               </Field>
               <Field label="Invoice No" required>
-                <input className="sales-input" value={form.invoiceNo} onChange={(e) => setF("invoiceNo", e.target.value)} />
+                <input className="sales-input" placeholder="e.g., SAL-2026-125" value={form.invoiceNo} onChange={(e) => setF("invoiceNo", e.target.value)} />
               </Field>
               <Field label="Customer / Party" required>
-                <select className="sales-input" value={form.customer} onChange={(e) => setF("customer", e.target.value)}>
-                  {CUSTOMERS.map((o) => <option key={o}>{o}</option>)}
-                </select>
+                <MasterSelect value={form.customer} onChange={(v) => setF("customer", v)} options={masters.customers} />
               </Field>
 
-              <Field label="Location (Godown)" required>
-                <select className="sales-input" value={form.location} onChange={(e) => setF("location", e.target.value)}>
-                  {LOCATIONS.map((o) => <option key={o}>{o}</option>)}
-                </select>
+              <Field label="Company" required>
+                <MasterSelect value={form.company} onChange={(v) => setF("company", v)} options={masters.companies} />
+              </Field>
+              <Field label="Location (Godown)">
+                <MasterSelect value={form.location} onChange={(v) => setF("location", v)} options={masters.locations} />
               </Field>
               <Field label="Transport">
-                <select className="sales-input" value={form.transport} onChange={(e) => setF("transport", e.target.value)}>
-                  {TRANSPORTS.map((o) => <option key={o}>{o}</option>)}
-                </select>
+                <MasterSelect value={form.transport} onChange={(v) => setF("transport", v)} options={masters.transports} />
               </Field>
+
               <Field label="LR No">
                 <input className="sales-input" placeholder="Enter LR No" value={form.lrNo} onChange={(e) => setF("lrNo", e.target.value)} />
               </Field>
-
               <Field label="GST No">
-                <input className="sales-input" value={form.gstNo} onChange={(e) => setF("gstNo", e.target.value)} />
+                <input className="sales-input" placeholder="(auto-fills from customer)" value={form.gstNo} onChange={(e) => setF("gstNo", e.target.value)} />
               </Field>
+              <Field label="Sales Person">
+                <MasterSelect value={form.salesPerson} onChange={(v) => setF("salesPerson", v)} options={masters.salesPersons} />
+              </Field>
+
               <Field label="Payment Type">
                 <select className="sales-input" value={form.paymentType} onChange={(e) => setF("paymentType", e.target.value)}>
                   {PAYMENT_TYPES.map((o) => <option key={o}>{o}</option>)}
                 </select>
+              </Field>
+              <Field label="Payment Mode">
+                <MasterSelect value={form.paymentMode} onChange={(v) => setF("paymentMode", v)} options={masters.paymentModes} />
               </Field>
               <Field label="Due Date">
                 <div className="sales-input-wrap">
@@ -306,11 +457,6 @@ export default function Sales() {
                 </div>
               </Field>
 
-              <Field label="Sales Person">
-                <select className="sales-input" value={form.salesPerson} onChange={(e) => setF("salesPerson", e.target.value)}>
-                  {SALES_PERSONS.map((o) => <option key={o}>{o}</option>)}
-                </select>
-              </Field>
               <Field label="Remarks" full>
                 <input className="sales-input" placeholder="Enter remarks (optional)" value={form.remarks} onChange={(e) => setF("remarks", e.target.value)} />
               </Field>
@@ -329,19 +475,13 @@ export default function Sales() {
 
             <div className="sales-grid sales-grid--4">
               <Field label="Fabric / Item" required>
-                <select className="sales-input" value={itemForm.fabric} onChange={(e) => setIf("fabric", e.target.value)}>
-                  {FABRICS.map((o) => <option key={o}>{o}</option>)}
-                </select>
+                <MasterSelect value={itemForm.fabric} onChange={(v) => setIf("fabric", v)} options={masters.fabrics} />
               </Field>
-              <Field label="Quality" required>
-                <select className="sales-input" value={itemForm.quality} onChange={(e) => setIf("quality", e.target.value)}>
-                  {QUALITIES.map((o) => <option key={o}>{o}</option>)}
-                </select>
+              <Field label="Quality">
+                <MasterSelect value={itemForm.fabricQuality} onChange={(v) => setIf("fabricQuality", v)} options={masters.qualities} />
               </Field>
-              <Field label="Color" required>
-                <select className="sales-input" value={itemForm.color} onChange={(e) => setIf("color", e.target.value)}>
-                  {COLORS.map((o) => <option key={o}>{o}</option>)}
-                </select>
+              <Field label="Color">
+                <MasterSelect value={itemForm.color} onChange={(v) => setIf("color", v)} options={masters.colors} />
               </Field>
               <Field label="PCS (Taka)" required>
                 <input className="sales-input" type="number" min="1" value={itemForm.pcs} onChange={(e) => setIf("pcs", e.target.value)} placeholder="0" />
@@ -349,11 +489,11 @@ export default function Sales() {
             </div>
 
             <div className="sales-grid sales-grid--5">
-              <Field label="Meter (Per PCS)">
+              <Field label="Meter (Per PCS)" required>
                 <input className="sales-input" type="number" step="0.01" value={itemForm.meterPerPcs} onChange={(e) => setIf("meterPerPcs", e.target.value)} placeholder="0.00" />
               </Field>
               <Field label="Available PCS">
-                <input className="sales-input sales-input--readonly" readOnly value={itemForm.availablePcs} />
+                <input className={`sales-input ${availablePcs <= 0 ? "sales-input--zero" : "sales-input--readonly"}`} readOnly value={availablePcs} />
               </Field>
               <Field label="Rate (Per Mtr)" required>
                 <input className="sales-input" type="number" step="0.01" value={itemForm.rate} onChange={(e) => setIf("rate", e.target.value)} placeholder="0.00" />
@@ -395,9 +535,9 @@ export default function Sales() {
                     items.map((it, idx) => (
                       <tr key={it.id} className={`sales-tr ${editingId === it.id ? "sales-tr--editing" : ""}`}>
                         <td>{idx + 1}</td>
-                        <td className="sales-td--strong">{it.fabric}</td>
-                        <td>{it.quality}</td>
-                        <td>{it.color}</td>
+                        <td className="sales-td--strong">{nameOf(masters.fabrics, it.fabric)}</td>
+                        <td>{nameOf(masters.qualities, it.fabricQuality)}</td>
+                        <td>{nameOf(masters.colors, it.color)}</td>
                         <td className="sales-td--right">{it.pcs}</td>
                         <td className="sales-td--right">{fmt(it.meterPerPcs)}</td>
                         <td className="sales-td--right">{fmt(it.totalMeter)}</td>
@@ -406,8 +546,8 @@ export default function Sales() {
                         <td className="sales-td--right sales-td--strong">{fmt(it.amount)}</td>
                         <td className="sales-td--center">
                           <div className="sales-actions">
-                            <button className="sales-icon-btn sales-icon-btn--edit" title="Edit" onClick={() => handleEdit(it)}><Icon.Edit /></button>
-                            <button className="sales-icon-btn sales-icon-btn--delete" title="Delete" onClick={() => handleDelete(it.id)}><Icon.Trash /></button>
+                            <button className="sales-icon-btn sales-icon-btn--edit" title="Edit" onClick={() => handleEditItem(it)}><Icon.Edit /></button>
+                            <button className="sales-icon-btn sales-icon-btn--delete" title="Delete" onClick={() => handleDeleteItem(it.id)}><Icon.Trash /></button>
                           </div>
                         </td>
                       </tr>
@@ -439,7 +579,7 @@ export default function Sales() {
           {/* NOTE */}
           <div className="sales-note">
             <Icon.Info />
-            <span><strong>Note:</strong> Sales entry will automatically reduce stock from Inventory (available PCS).</span>
+            <span><strong>Note:</strong> Sales entry will automatically reduce stock from Inventory. Make sure stock is available before saving.</span>
           </div>
         </div>
 
@@ -486,14 +626,10 @@ export default function Sales() {
           --sl-warning: #f59e0b;
           --sl-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          color: var(--sl-text);
-          font-size: 14px;
-          line-height: 1.4;
-          // padding: 24px;
+          color: var(--sl-text); font-size: 14px; line-height: 1.4;
         }
         .sales-page svg { width: 16px; height: 16px; display: block; }
 
-        /* HEADER */
         .sales-page__header {
           display: flex; align-items: flex-start; justify-content: space-between;
           gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
@@ -504,28 +640,23 @@ export default function Sales() {
         .sales-breadcrumb__current { color: var(--sl-primary); font-weight: 500; }
         .sales-page__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-        /* BUTTONS */
         .sales-btn {
           display: inline-flex; align-items: center; gap: 8px;
-          padding: 9px 16px;
-          border-radius: 8px;
+          padding: 9px 16px; border-radius: 8px;
           font-size: 14px; font-weight: 500;
-          cursor: pointer;
-          border: 1px solid transparent;
-          transition: all 0.15s;
-          background: #fff;
-          font-family: inherit;
-          white-space: nowrap;
+          cursor: pointer; border: 1px solid transparent;
+          transition: all 0.15s; background: #fff;
+          font-family: inherit; white-space: nowrap;
         }
+        .sales-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .sales-btn--ghost { background: #fff; border-color: var(--sl-border); color: var(--sl-text); }
         .sales-btn--ghost:hover { background: #f8fafc; }
         .sales-btn--primary { background: var(--sl-primary); color: #fff; border-color: var(--sl-primary); }
-        .sales-btn--primary:hover { background: var(--sl-primary-hover); }
+        .sales-btn--primary:hover:not(:disabled) { background: var(--sl-primary-hover); }
         .sales-btn--sm { padding: 7px 12px; font-size: 13px; }
         .sales-icon-btn {
           background: none; border: none; cursor: pointer;
-          width: 30px; height: 30px;
-          border-radius: 6px;
+          width: 30px; height: 30px; border-radius: 6px;
           display: inline-flex; align-items: center; justify-content: center;
           transition: all 0.15s;
         }
@@ -535,22 +666,16 @@ export default function Sales() {
         .sales-icon-btn--delete { background: #fee2e2; color: var(--sl-danger); }
         .sales-icon-btn--delete:hover { background: #fecaca; }
 
-        /* LAYOUT */
         .sales-content {
-          display: grid;
-          grid-template-columns: 1fr 320px;
-          gap: 20px;
-          align-items: flex-start;
+          display: grid; grid-template-columns: 1fr 320px;
+          gap: 20px; align-items: flex-start;
         }
         .sales-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
         .sales-aside { display: flex; flex-direction: column; gap: 18px; }
 
-        /* CARD */
         .sales-card {
-          background: var(--sl-card);
-          border: 1px solid var(--sl-border);
-          border-radius: 12px;
-          padding: 20px;
+          background: var(--sl-card); border: 1px solid var(--sl-border);
+          border-radius: 12px; padding: 20px;
           box-shadow: var(--sl-shadow);
         }
         .sales-card__title { font-size: 16px; font-weight: 600; margin: 0 0 16px 0; }
@@ -560,54 +685,34 @@ export default function Sales() {
         }
         .sales-card__head .sales-card__title { margin: 0; }
 
-        /* FORM GRID */
-        .sales-grid {
-          display: grid;
-          gap: 14px 18px;
-        }
+        .sales-grid { display: grid; gap: 14px 18px; }
         .sales-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .sales-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
         .sales-grid--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 
-        /* FIELD */
         .sales-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
         .sales-field--full { grid-column: 1 / -1; }
-        .sales-field--span2 { grid-column: span 2; }
-        .sales-field__label {
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--sl-label);
-        }
+        .sales-field__label { font-size: 13px; font-weight: 500; color: var(--sl-label); }
         .sales-field__required { color: var(--sl-danger); margin-left: 2px; }
 
-        /* INPUTS */
         .sales-input {
-          width: 100%;
-          padding: 9px 12px;
+          width: 100%; padding: 9px 12px;
           border: 1px solid var(--sl-border);
-          border-radius: 8px;
-          background: #fff;
-          font-size: 14px;
-          color: var(--sl-text);
+          border-radius: 8px; background: #fff;
+          font-size: 14px; color: var(--sl-text);
           font-family: inherit;
           transition: border-color 0.15s, box-shadow 0.15s;
         }
         .sales-input:focus {
-          outline: none;
-          border-color: var(--sl-primary);
+          outline: none; border-color: var(--sl-primary);
           box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
         }
         .sales-input::placeholder { color: #94a3b8; }
-        .sales-input--readonly {
-          background: #f8fafc;
-          color: var(--sl-muted);
-          cursor: not-allowed;
-        }
+        .sales-input--readonly { background: #f8fafc; color: var(--sl-muted); cursor: not-allowed; }
+        .sales-input--zero { background: #fee2e2; color: #b91c1c; cursor: not-allowed; font-weight: 600; }
         .sales-input--computed {
-          background: #eff6ff;
-          color: var(--sl-primary);
-          font-weight: 600;
-          border-color: #bfdbfe;
+          background: #eff6ff; color: var(--sl-primary);
+          font-weight: 600; border-color: #bfdbfe;
         }
         .sales-input-wrap { position: relative; }
         .sales-input-wrap .sales-input { padding-right: 36px; }
@@ -617,29 +722,20 @@ export default function Sales() {
           color: var(--sl-muted); pointer-events: none;
         }
 
-        /* TABLE */
-        .sales-table-wrap {
-          overflow-x: auto;
-          border: 1px solid var(--sl-border);
-          border-radius: 8px;
-        }
+        .sales-table-wrap { overflow-x: auto; border: 1px solid var(--sl-border); border-radius: 8px; }
         .sales-table { width: 100%; border-collapse: collapse; min-width: 1100px; }
         .sales-table th {
-          background: #f8fafc;
-          padding: 11px 14px;
+          background: #f8fafc; padding: 11px 14px;
           font-size: 11px; font-weight: 600;
-          color: var(--sl-muted);
-          text-align: left;
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
+          color: var(--sl-muted); text-align: left;
+          text-transform: uppercase; letter-spacing: 0.4px;
           border-bottom: 1px solid var(--sl-border);
           white-space: nowrap;
         }
         .sales-th--right { text-align: right; }
         .sales-th--center { text-align: center; }
         .sales-table td {
-          padding: 13px 14px;
-          font-size: 13px;
+          padding: 13px 14px; font-size: 13px;
           border-bottom: 1px solid var(--sl-border);
           white-space: nowrap;
         }
@@ -652,54 +748,35 @@ export default function Sales() {
         .sales-td--empty { text-align: center; color: var(--sl-muted); padding: 32px !important; }
         .sales-actions { display: inline-flex; gap: 6px; justify-content: center; }
 
-        /* TOTAL ROW */
         .sales-total-row td {
-          background: #f8fafc;
-          font-size: 13px;
+          background: #f8fafc; font-size: 13px;
           padding: 14px;
           border-top: 2px solid var(--sl-border);
           border-bottom: none;
         }
 
-        .sales-pagination__info {
-          margin-top: 12px;
-          font-size: 13px;
-          color: var(--sl-muted);
-        }
+        .sales-pagination__info { margin-top: 12px; font-size: 13px; color: var(--sl-muted); }
 
-        /* NOTE */
         .sales-note {
-          background: #eff6ff;
-          border: 1px solid #bfdbfe;
-          border-radius: 10px;
-          padding: 14px 18px;
+          background: #eff6ff; border: 1px solid #bfdbfe;
+          border-radius: 10px; padding: 14px 18px;
           display: flex; align-items: center; gap: 10px;
-          font-size: 13px;
-          color: #1e40af;
+          font-size: 13px; color: #1e40af;
         }
         .sales-note svg { color: var(--sl-primary); flex-shrink: 0; }
 
-        /* SUMMARY */
         .sales-summary-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 12px;
-          margin-bottom: 14px;
+          display: grid; grid-template-columns: repeat(2, 1fr);
+          gap: 12px; margin-bottom: 14px;
         }
         .sales-summary-box {
-          background: #f8fafc;
-          border: 1px solid var(--sl-border);
-          border-radius: 10px;
-          padding: 14px;
+          background: #f8fafc; border: 1px solid var(--sl-border);
+          border-radius: 10px; padding: 14px;
         }
         .sales-summary-box__label { font-size: 12px; color: var(--sl-muted); margin-bottom: 6px; }
         .sales-summary-box__value { font-size: 20px; font-weight: 700; color: var(--sl-text); }
 
-        .sales-highlight {
-          border-radius: 10px;
-          padding: 16px;
-          margin-top: 12px;
-        }
+        .sales-highlight { border-radius: 10px; padding: 16px; margin-top: 12px; }
         .sales-highlight:first-of-type { margin-top: 0; }
         .sales-highlight--blue { background: #eff6ff; border: 1px solid #bfdbfe; }
         .sales-highlight--blue .sales-highlight__value { color: var(--sl-primary); }
@@ -710,7 +787,6 @@ export default function Sales() {
         .sales-highlight__label { font-size: 13px; color: var(--sl-label); margin-bottom: 6px; font-weight: 500; }
         .sales-highlight__value { font-size: 22px; font-weight: 700; }
 
-        /* RESPONSIVE */
         @media (max-width: 1300px) {
           .sales-content { grid-template-columns: 1fr; }
           .sales-aside { order: -1; }
@@ -739,9 +815,7 @@ export default function Sales() {
   );
 }
 
-/* ================================================================
-   HELPERS
-   ================================================================ */
+/* ──────── HELPERS ──────── */
 function Field({ label, required, full, children }) {
   return (
     <div className={`sales-field ${full ? "sales-field--full" : ""}`}>
@@ -751,6 +825,17 @@ function Field({ label, required, full, children }) {
       </label>
       {children}
     </div>
+  );
+}
+
+function MasterSelect({ value, onChange, options = [] }) {
+  return (
+    <select className="sales-input" value={value || ""} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Select...</option>
+      {options.map((opt) => (
+        <option key={opt._id} value={opt._id}>{opt.name}</option>
+      ))}
+    </select>
   );
 }
 

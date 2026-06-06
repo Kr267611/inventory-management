@@ -25,6 +25,11 @@ import SalesReport from "./pages/Reports/SalesReport";
 import PaymentReport from "./pages/Reports/PaymentReport";
 import PartyWiseReport from "./pages/Reports/PartyWiseReport";
 import SummaryReport from "./pages/Reports/SummaryReport";
+import ContainerMaster from "./pages/Masters/ContainerMaster";
+import CustomerMaster from "./pages/Masters/CustomerMaster";
+import PaymentmodeMaster from "./pages/Masters/PaymentmodeMaster";
+import SalesPersonMaster from "./pages/Masters/SalespersonMaster";
+import TransportMaster from "./pages/Masters/TransportMaster";
 
 function App() {
   return (
@@ -58,6 +63,11 @@ function App() {
           <Route path="company"  element={<CompanyMaster />} />
           <Route path="uom" element={<UomMaster />} />
           <Route path="supplier" element={<SupplierMaster />} />
+          <Route path="container" element={<ContainerMaster />} />
+          <Route path="customer" element={<CustomerMaster />} />
+          <Route path="paymentmode" element={<PaymentmodeMaster />} />
+          <Route path="salesperson" element={<SalesPersonMaster />} />
+          <Route path="transport" element={<TransportMaster />} />
         </Route>
         <Route path="setting" element={<Setting />} />
       </Route>

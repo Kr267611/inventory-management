@@ -1,4 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect } from "react";
+import { inventoryApi } from "../../Api/inventoryApi";
+import { fetchAllMasters } from "../../Api/masterApi";
 
 /* ================================================================
    ICONS
@@ -32,12 +34,6 @@ const Icon = {
       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
     </svg>
   ),
-  Calendar: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  ),
   Eye: () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
@@ -50,38 +46,12 @@ const Icon = {
   ),
 };
 
-/* ================================================================
-   MOCK DATA — baad me API se replace karna
-   ================================================================ */
-const STATS = [
-  { label: "Total Items",       value: "128",            hint: "Unique Items",        tone: "default" },
-  { label: "Total Stock (Mtr)", value: "15,240.75",      hint: "In Stock",            tone: "default" },
-  { label: "Total Value (INR)", value: "₹ 18,75,320.50", hint: "Stock Value",         tone: "default" },
-  { label: "Low Stock Items",   value: "12",             hint: "Below Minimum Level", tone: "warning" },
-  { label: "Out of Stock Items",value: "3",              hint: "No Stock Available",  tone: "danger"  },
-];
-
-const INVENTORY = [
-  { id: 1, item: "GREY FABRIC",   quality: "POLY KNIT BIG", color: "GREY",   pcs: 8, meter: 25.59, totalMeter: 204.72, rate: 95.00,  totalValue: 19449.60, location: "Godown A", status: "In Stock" },
-  { id: 2, item: "BLUE FABRIC",   quality: "POLY KNIT BIG", color: "BLUE",   pcs: 5, meter: 25.65, totalMeter: 128.25, rate: 92.00,  totalValue: 11801.00, location: "Godown A", status: "In Stock" },
-  { id: 3, item: "BLACK FABRIC",  quality: "POLY KNIT BIG", color: "BLACK",  pcs: 6, meter: 25.62, totalMeter: 153.72, rate: 98.00,  totalValue: 15066.56, location: "Godown B", status: "In Stock" },
-  { id: 4, item: "WHITE FABRIC",  quality: "POLY KNIT BIG", color: "WHITE",  pcs: 4, meter: 25.92, totalMeter: 103.68, rate: 90.00,  totalValue: 9331.20,  location: "Godown B", status: "Low Stock" },
-  { id: 5, item: "NAVY FABRIC",   quality: "POLY KNIT BIG", color: "NAVY",   pcs: 3, meter: 25.94, totalMeter: 77.82,  rate: 97.00,  totalValue: 7547.54,  location: "Godown A", status: "Low Stock" },
-  { id: 6, item: "RED FABRIC",    quality: "POLY KNIT BIG", color: "RED",    pcs: 2, meter: 25.17, totalMeter: 50.34,  rate: 100.00, totalValue: 5034.00,  location: "Godown B", status: "Low Stock" },
-  { id: 7, item: "GREEN FABRIC",  quality: "POLY KNIT BIG", color: "GREEN",  pcs: 0, meter: 0,     totalMeter: 0,      rate: null,   totalValue: 0,        location: "Godown A", status: "Out of Stock" },
-  { id: 8, item: "YELLOW FABRIC", quality: "POLY KNIT BIG", color: "YELLOW", pcs: 0, meter: 0,     totalMeter: 0,      rate: null,   totalValue: 0,        location: "Godown B", status: "Out of Stock" },
-];
-
-const FABRICS  = ["All Fabrics", "GREY FABRIC", "BLUE FABRIC", "BLACK FABRIC", "WHITE FABRIC", "NAVY FABRIC", "RED FABRIC", "GREEN FABRIC", "YELLOW FABRIC"];
-const QUALITIES = ["All Quality", "POLY KNIT BIG", "COTTON", "SILK"];
-const COLORS    = ["All Color", "GREY", "BLUE", "BLACK", "WHITE", "NAVY", "RED", "GREEN", "YELLOW"];
-const LOCATIONS = ["All Locations", "Godown A", "Godown B"];
 const STOCK_TYPES = ["All Stock", "In Stock", "Low Stock", "Out of Stock"];
 
 const EMPTY_FILTERS = {
   search: "",
   fabric: "All Fabrics",
-  quality: "All Quality",
+  fabricQuality: "All Quality",     // 👈 backend ke saath naam match
   color: "All Color",
   location: "All Locations",
   stockType: "All Stock",
@@ -89,33 +59,84 @@ const EMPTY_FILTERS = {
   toDate: "",
 };
 
-const fmtNum = (n) => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtNum = (n) =>
+  Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* ================================================================
    MAIN
    ================================================================ */
 const Inventory = () => {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const [stats, setStats] = useState({
+    totalItems: 0,
+    totalStockMtr: 0,
+    totalValue: 0,
+    lowStockItems: 0,
+    outOfStockItems: 0,
+  });
+
+  const [masters, setMasters] = useState({
+    fabrics: [], qualities: [], colors: [], locations: [],
+  });
+
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
 
-  const filteredRows = useMemo(() => {
-    return INVENTORY.filter((row) => {
-      const q = filters.search.trim().toLowerCase();
-      if (q && !(
-        row.item.toLowerCase().includes(q) ||
-        row.quality.toLowerCase().includes(q) ||
-        row.color.toLowerCase().includes(q)
-      )) return false;
-      if (filters.fabric !== "All Fabrics" && row.item !== filters.fabric) return false;
-      if (filters.quality !== "All Quality" && row.quality !== filters.quality) return false;
-      if (filters.color !== "All Color" && row.color !== filters.color) return false;
-      if (filters.location !== "All Locations" && row.location !== filters.location) return false;
-      if (filters.stockType !== "All Stock" && row.status !== filters.stockType) return false;
-      return true;
-    });
-  }, [filters]);
+  /* ──────── LOAD MASTERS + INITIAL INVENTORY ──────── */
+  useEffect(() => {
+    loadMasters();
+    loadInventory(EMPTY_FILTERS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const resetFilters = () => setFilters(EMPTY_FILTERS);
+  const loadMasters = async () => {
+    try {
+      const m = await fetchAllMasters();
+      setMasters({
+        fabrics: m.fabrics || [],
+        qualities: m.qualities || [],
+        colors: m.colors || [],
+        locations: m.locations || [],
+      });
+    } catch (err) {
+      console.error("Masters load failed:", err.message);
+    }
+  };
+
+  const loadInventory = async (filterObj = filters) => {
+    try {
+      setLoading(true);
+      const [inventoryData, statsData] = await Promise.all([
+        inventoryApi.getAll(filterObj),
+        inventoryApi.getStats(),
+      ]);
+      setInventory(inventoryData);
+      setStats(statsData);
+    } catch (err) {
+      alert("Inventory load failed: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyFilters = () => loadInventory(filters);
+
+  const resetFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    loadInventory(EMPTY_FILTERS);
+  };
+
+  /* ──────── STAT CARDS — real data se ──────── */
+  const STAT_CARDS = [
+    { label: "Total Items",        value: String(stats.totalItems),         hint: "Unique Items",        tone: "default" },
+    { label: "Total Stock (Mtr)",  value: fmtNum(stats.totalStockMtr),      hint: "In Stock",            tone: "default" },
+    { label: "Total Value (INR)",  value: "₹ " + fmtNum(stats.totalValue),  hint: "Stock Value",         tone: "default" },
+    { label: "Low Stock Items",    value: String(stats.lowStockItems),      hint: "Below Minimum Level", tone: "warning" },
+    { label: "Out of Stock Items", value: String(stats.outOfStockItems),    hint: "No Stock Available",  tone: "danger"  },
+  ];
 
   return (
     <div className="inv-page">
@@ -144,7 +165,7 @@ const Inventory = () => {
 
       {/* STAT CARDS */}
       <div className="inv-stats">
-        {STATS.map((s) => (
+        {STAT_CARDS.map((s) => (
           <div key={s.label} className="inv-stat">
             <div className="inv-stat__label">{s.label}</div>
             <div className={`inv-stat__value inv-stat__value--${s.tone}`}>{s.value}</div>
@@ -167,24 +188,40 @@ const Inventory = () => {
               <span className="inv-input__icon"><Icon.Search /></span>
             </div>
           </Field>
+
           <Field label="Fabric / Item">
             <select className="inv-input" value={filters.fabric} onChange={(e) => setF("fabric", e.target.value)}>
-              {FABRICS.map((o) => <option key={o}>{o}</option>)}
+              <option value="All Fabrics">All Fabrics</option>
+              {masters.fabrics.map((f) => (
+                <option key={f._id} value={f._id}>{f.name}</option>
+              ))}
             </select>
           </Field>
+
           <Field label="Quality">
-            <select className="inv-input" value={filters.quality} onChange={(e) => setF("quality", e.target.value)}>
-              {QUALITIES.map((o) => <option key={o}>{o}</option>)}
+            <select className="inv-input" value={filters.fabricQuality} onChange={(e) => setF("fabricQuality", e.target.value)}>
+              <option value="All Quality">All Quality</option>
+              {masters.qualities.map((q) => (
+                <option key={q._id} value={q._id}>{q.name}</option>
+              ))}
             </select>
           </Field>
+
           <Field label="Color">
             <select className="inv-input" value={filters.color} onChange={(e) => setF("color", e.target.value)}>
-              {COLORS.map((o) => <option key={o}>{o}</option>)}
+              <option value="All Color">All Color</option>
+              {masters.colors.map((c) => (
+                <option key={c._id} value={c._id}>{c.name}</option>
+              ))}
             </select>
           </Field>
+
           <Field label="Location">
             <select className="inv-input" value={filters.location} onChange={(e) => setF("location", e.target.value)}>
-              {LOCATIONS.map((o) => <option key={o}>{o}</option>)}
+              <option value="All Locations">All Locations</option>
+              {masters.locations.map((l) => (
+                <option key={l._id} value={l._id}>{l.name}</option>
+              ))}
             </select>
           </Field>
         </div>
@@ -196,20 +233,16 @@ const Inventory = () => {
             </select>
           </Field>
           <Field label="From Date">
-            <div className="inv-input-wrap">
-              <input type="date" className="inv-input" value={filters.fromDate} onChange={(e) => setF("fromDate", e.target.value)} placeholder="DD/MM/YYYY" />
-            </div>
+            <input type="date" className="inv-input" value={filters.fromDate} onChange={(e) => setF("fromDate", e.target.value)} />
           </Field>
           <Field label="To Date">
-            <div className="inv-input-wrap">
-              <input type="date" className="inv-input" value={filters.toDate} onChange={(e) => setF("toDate", e.target.value)} placeholder="DD/MM/YYYY" />
-            </div>
+            <input type="date" className="inv-input" value={filters.toDate} onChange={(e) => setF("toDate", e.target.value)} />
           </Field>
           <div className="inv-filters__actions">
             <button className="inv-btn inv-btn--ghost" onClick={resetFilters}>
               <Icon.Refresh /><span>Reset</span>
             </button>
-            <button className="inv-btn inv-btn--primary" onClick={() => alert("Filter applied (mock)")}>
+            <button className="inv-btn inv-btn--primary" onClick={applyFilters}>
               <Icon.Filter /><span>Apply Filter</span>
             </button>
           </div>
@@ -229,7 +262,7 @@ const Inventory = () => {
                 <th>Quality</th>
                 <th>Color</th>
                 <th className="inv-th--right">PCS (Taka)</th>
-                <th className="inv-th--right">Meter</th>
+                <th className="inv-th--right">Meter (Avg/PCS)</th>
                 <th className="inv-th--right">Total Meter</th>
                 <th className="inv-th--right">Rate (Per Mtr)</th>
                 <th className="inv-th--right">Total Value (INR)</th>
@@ -239,33 +272,60 @@ const Inventory = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredRows.length === 0 ? (
-                <tr>
-                  <td colSpan="12" className="inv-td--empty">No inventory items match the filters</td>
-                </tr>
+              {loading ? (
+                <tr><td colSpan="12" className="inv-td--empty">Loading...</td></tr>
+              ) : inventory.length === 0 ? (
+                <tr><td colSpan="12" className="inv-td--empty">No inventory items found</td></tr>
               ) : (
-                filteredRows.map((r, idx) => (
-                  <tr key={r.id} className="inv-tr">
-                    <td>{idx + 1}</td>
-                    <td className="inv-td--strong">{r.item}</td>
-                    <td>{r.quality}</td>
-                    <td>{r.color}</td>
-                    <td className="inv-td--right">{r.pcs}</td>
-                    <td className="inv-td--right">{fmtNum(r.meter)}</td>
-                    <td className="inv-td--right">{fmtNum(r.totalMeter)}</td>
-                    <td className="inv-td--right">{r.rate == null ? "-" : fmtNum(r.rate)}</td>
-                    <td className="inv-td--right">{fmtNum(r.totalValue)}</td>
-                    <td>{r.location}</td>
-                    <td className="inv-td--center">
-                      <span className={`inv-badge inv-badge--${r.status.toLowerCase().replace(/ /g, "-")}`}>{r.status}</span>
-                    </td>
-                    <td className="inv-td--center">
-                      <button className="inv-icon-btn inv-icon-btn--view" title="View" onClick={() => alert(`View ${r.item}`)}>
-                        <Icon.Eye />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                inventory.map((r, idx) => {
+                  // Status compute karo (backend virtual may not always serialize)
+                  const status =
+                    r.totalPcs <= 0 ? "Out of Stock" :
+                    r.totalPcs <= (r.minStockPcs || 5) ? "Low Stock" :
+                    "In Stock";
+
+                  const avgMeterPerPcs = r.totalPcs ? r.totalMeter / r.totalPcs : 0;
+
+                  return (
+                    <tr key={r._id} className="inv-tr">
+                      <td>{idx + 1}</td>
+                      <td className="inv-td--strong">{r.fabric?.name || "-"}</td>
+                      <td>{r.fabricQuality?.name || "-"}</td>
+                      <td>{r.color?.name || "-"}</td>
+                      <td className="inv-td--right">{r.totalPcs}</td>
+                      <td className="inv-td--right">{fmtNum(avgMeterPerPcs)}</td>
+                      <td className="inv-td--right">{fmtNum(r.totalMeter)}</td>
+                      <td className="inv-td--right">{r.avgRate ? fmtNum(r.avgRate) : "-"}</td>
+                      <td className="inv-td--right">{fmtNum(r.totalValue)}</td>
+                      <td>{r.location?.name || "-"}</td>
+                      <td className="inv-td--center">
+                        <span className={`inv-badge inv-badge--${status.toLowerCase().replace(/ /g, "-")}`}>
+                          {status}
+                        </span>
+                      </td>
+                      <td className="inv-td--center">
+                        <button
+                          className="inv-icon-btn inv-icon-btn--view"
+                          title="View"
+                          onClick={() =>
+                            alert(
+                              `${r.fabric?.name || "-"}\n` +
+                              `Quality: ${r.fabricQuality?.name || "-"}\n` +
+                              `Color: ${r.color?.name || "-"}\n` +
+                              `Location: ${r.location?.name || "-"}\n\n` +
+                              `Available PCS: ${r.totalPcs}\n` +
+                              `Total Meter: ${fmtNum(r.totalMeter)}\n` +
+                              `Avg Rate: ₹${fmtNum(r.avgRate)}\n` +
+                              `Total Value: ₹${fmtNum(r.totalValue)}`
+                            )
+                          }
+                        >
+                          <Icon.Eye />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -274,7 +334,7 @@ const Inventory = () => {
         {/* Pagination */}
         <div className="inv-pagination">
           <div className="inv-pagination__info">
-            Showing {filteredRows.length === 0 ? 0 : 1} to {filteredRows.length} of {filteredRows.length} entries
+            Showing {inventory.length === 0 ? 0 : 1} to {inventory.length} of {inventory.length} entries
           </div>
           <div className="inv-pagination__controls">
             <button className="inv-page-btn" disabled>Previous</button>
@@ -310,11 +370,9 @@ const Inventory = () => {
           color: var(--iv-text);
           font-size: 14px;
           line-height: 1.4;
-          // padding: 24px;
         }
         .inv-page svg { width: 16px; height: 16px; display: block; }
 
-        /* HEADER */
         .inv-page__header {
           display: flex; align-items: flex-start; justify-content: space-between;
           gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
@@ -325,18 +383,13 @@ const Inventory = () => {
         .inv-breadcrumb__current { color: var(--iv-primary); font-weight: 500; }
         .inv-page__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-        /* BUTTONS */
         .inv-btn {
           display: inline-flex; align-items: center; gap: 8px;
-          padding: 9px 16px;
-          border-radius: 8px;
+          padding: 9px 16px; border-radius: 8px;
           font-size: 14px; font-weight: 500;
-          cursor: pointer;
-          border: 1px solid transparent;
-          transition: all 0.15s;
-          background: #fff;
-          font-family: inherit;
-          white-space: nowrap;
+          cursor: pointer; border: 1px solid transparent;
+          transition: all 0.15s; background: #fff;
+          font-family: inherit; white-space: nowrap;
         }
         .inv-btn--ghost { background: #fff; border-color: var(--iv-border); color: var(--iv-text); }
         .inv-btn--ghost:hover { background: #f8fafc; }
@@ -346,88 +399,60 @@ const Inventory = () => {
           background: none; border: none; cursor: pointer;
           width: 32px; height: 32px;
           display: inline-flex; align-items: center; justify-content: center;
-          border-radius: 6px;
-          transition: all 0.15s;
+          border-radius: 6px; transition: all 0.15s;
         }
         .inv-icon-btn--view { background: #eff6ff; color: var(--iv-primary); }
         .inv-icon-btn--view:hover { background: #dbeafe; }
 
-        /* STAT CARDS */
         .inv-stats {
-          display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 14px;
-          margin-bottom: 18px;
+          display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 14px; margin-bottom: 18px;
         }
         .inv-stat {
-          background: var(--iv-card);
-          border: 1px solid var(--iv-border);
-          border-radius: 12px;
-          padding: 16px 18px;
+          background: var(--iv-card); border: 1px solid var(--iv-border);
+          border-radius: 12px; padding: 16px 18px;
           box-shadow: var(--iv-shadow);
         }
         .inv-stat__label { font-size: 13px; color: var(--iv-muted); margin-bottom: 8px; }
         .inv-stat__value {
-          font-size: 22px;
-          font-weight: 700;
-          color: var(--iv-text);
-          margin-bottom: 6px;
-          line-height: 1.2;
+          font-size: 22px; font-weight: 700; color: var(--iv-text);
+          margin-bottom: 6px; line-height: 1.2;
         }
         .inv-stat__value--warning { color: var(--iv-danger); }
         .inv-stat__value--danger  { color: var(--iv-danger); }
         .inv-stat__hint { font-size: 12px; color: var(--iv-muted); }
 
-        /* CARD */
         .inv-card {
-          background: var(--iv-card);
-          border: 1px solid var(--iv-border);
-          border-radius: 12px;
-          padding: 20px;
-          box-shadow: var(--iv-shadow);
-          margin-bottom: 18px;
+          background: var(--iv-card); border: 1px solid var(--iv-border);
+          border-radius: 12px; padding: 20px;
+          box-shadow: var(--iv-shadow); margin-bottom: 18px;
         }
         .inv-card__title { font-size: 15px; font-weight: 600; margin: 0 0 16px 0; }
 
-        /* FILTERS */
         .inv-filters__row {
-          display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 14px;
-          margin-bottom: 14px;
+          display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 14px; margin-bottom: 14px;
         }
         .inv-filters__row:last-child { margin-bottom: 0; }
         .inv-filters__row--bottom {
           grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
           align-items: end;
         }
-        .inv-filters__actions {
-          display: flex; gap: 8px;
-        }
+        .inv-filters__actions { display: flex; gap: 8px; }
 
-        /* FIELDS */
         .inv-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-        .inv-field__label {
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--iv-label);
-        }
+        .inv-field__label { font-size: 13px; font-weight: 500; color: var(--iv-label); }
 
-        /* INPUTS */
         .inv-input {
-          width: 100%;
-          padding: 9px 12px;
+          width: 100%; padding: 9px 12px;
           border: 1px solid var(--iv-border);
-          border-radius: 8px;
-          background: #fff;
-          font-size: 13px;
-          color: var(--iv-text);
+          border-radius: 8px; background: #fff;
+          font-size: 13px; color: var(--iv-text);
           font-family: inherit;
           transition: border-color 0.15s, box-shadow 0.15s;
         }
         .inv-input:focus {
-          outline: none;
-          border-color: var(--iv-primary);
+          outline: none; border-color: var(--iv-primary);
           box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
         }
         .inv-input::placeholder { color: #94a3b8; }
@@ -439,16 +464,13 @@ const Inventory = () => {
           color: var(--iv-muted); pointer-events: none;
         }
 
-        /* TABLE */
         .inv-table-wrap { overflow-x: auto; }
         .inv-table { width: 100%; border-collapse: collapse; min-width: 1100px; }
         .inv-table th {
-          background: #f8fafc;
-          padding: 12px 14px;
+          background: #f8fafc; padding: 12px 14px;
           font-size: 11px; font-weight: 600;
           color: var(--iv-muted);
-          text-align: left;
-          text-transform: uppercase;
+          text-align: left; text-transform: uppercase;
           letter-spacing: 0.4px;
           border-bottom: 1px solid var(--iv-border);
           white-space: nowrap;
@@ -456,8 +478,7 @@ const Inventory = () => {
         .inv-th--right { text-align: right; }
         .inv-th--center { text-align: center; }
         .inv-table td {
-          padding: 14px;
-          font-size: 13px;
+          padding: 14px; font-size: 13px;
           border-bottom: 1px solid var(--iv-border);
           white-space: nowrap;
         }
@@ -468,19 +489,14 @@ const Inventory = () => {
         .inv-td--strong { font-weight: 600; }
         .inv-td--empty { text-align: center; color: var(--iv-muted); padding: 40px !important; }
 
-        /* STATUS BADGES */
         .inv-badge {
-          display: inline-block;
-          padding: 4px 12px;
-          border-radius: 12px;
-          font-size: 11px;
-          font-weight: 600;
+          display: inline-block; padding: 4px 12px;
+          border-radius: 12px; font-size: 11px; font-weight: 600;
         }
         .inv-badge--in-stock     { background: #d1fae5; color: #047857; }
         .inv-badge--low-stock    { background: #ffedd5; color: #c2410c; }
         .inv-badge--out-of-stock { background: #fee2e2; color: #b91c1c; }
 
-        /* PAGINATION */
         .inv-pagination {
           padding-top: 16px;
           display: flex; align-items: center; justify-content: space-between;
@@ -489,39 +505,28 @@ const Inventory = () => {
         .inv-pagination__info { font-size: 13px; color: var(--iv-muted); }
         .inv-pagination__controls { display: flex; gap: 6px; }
         .inv-page-btn {
-          min-width: 36px;
-          padding: 7px 14px;
+          min-width: 36px; padding: 7px 14px;
           border: 1px solid var(--iv-border);
-          background: #fff;
-          border-radius: 6px;
-          font-size: 13px;
-          cursor: pointer;
-          color: var(--iv-text);
-          font-family: inherit;
+          background: #fff; border-radius: 6px;
+          font-size: 13px; cursor: pointer;
+          color: var(--iv-text); font-family: inherit;
         }
         .inv-page-btn:hover:not(:disabled) { background: #f8fafc; }
         .inv-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
         .inv-page-btn--active { background: var(--iv-primary); color: #fff; border-color: var(--iv-primary); }
 
-        /* FLOW NOTE */
         .inv-flow {
-          background: #eff6ff;
-          border: 1px solid #bfdbfe;
-          border-radius: 10px;
-          padding: 14px 18px;
+          background: #eff6ff; border: 1px solid #bfdbfe;
+          border-radius: 10px; padding: 14px 18px;
           display: flex; align-items: center; gap: 10px;
-          font-size: 13px;
-          color: #1e40af;
+          font-size: 13px; color: #1e40af;
         }
         .inv-flow svg { color: var(--iv-primary); flex-shrink: 0; }
 
-        /* RESPONSIVE */
         @media (max-width: 1400px) {
           .inv-stats { grid-template-columns: repeat(3, 1fr); }
           .inv-filters__row { grid-template-columns: repeat(3, 1fr); }
-          .inv-filters__row--bottom {
-            grid-template-columns: repeat(3, 1fr);
-          }
+          .inv-filters__row--bottom { grid-template-columns: repeat(3, 1fr); }
           .inv-filters__actions { grid-column: 1 / -1; justify-content: flex-end; }
         }
         @media (max-width: 900px) {

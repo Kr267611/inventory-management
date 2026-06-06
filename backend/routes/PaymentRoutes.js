@@ -2,95 +2,216 @@ const express = require("express");
 const router = express.Router();
 const Payment = require("../models/Payment");
 const Sales = require("../models/Sales");
+const authMiddleware = require("../middleware/authMiddleware");
 
+router.use(authMiddleware);
+
+/* ──────────────────────────────────────────────
+   HELPER: Sale ke paid/balance/status refresh karna
+   Har payment create/update/delete ke baad chalega
+   ────────────────────────────────────────────── */
+async function refreshSalePaymentStatus(saleId) {
+  if (!saleId) return;
+
+  const sale = await Sales.findById(saleId);
+  if (!sale) return;
+
+  // Saare payments ka sum nikaalo for this sale
+  const result = await Payment.aggregate([
+    { $match: { sale: sale._id } },
+    { $group: { _id: null, total: { $sum: "$amountReceived" } } },
+  ]);
+  const paid = result[0]?.total || 0;
+
+  sale.paidAmount = +paid.toFixed(2);
+  sale.balanceDue = +Math.max(sale.netAmount - paid, 0).toFixed(2);
+  sale.paymentStatus =
+    paid === 0 ? "Unpaid" :
+    paid >= sale.netAmount ? "Paid" :
+    "Partial";
+
+  await sale.save();
+}
+
+/* ──────────────────────────────────────────────
+   1. CREATE PAYMENT
+   ────────────────────────────────────────────── */
 router.post("/add", async (req, res) => {
   try {
-
+    // Sale exist karta hai check karo
     const sale = await Sales.findById(req.body.sale);
+    if (!sale) return res.status(404).json({ message: "Sale not found" });
 
-    if (!sale) {
-      return res.status(404).json({ message: "Sale not found" });
-    }
+    // Payment create — pre-save hook automatically:
+    // - paymentId generate karega
+    // - totalInvoiceAmount sale se fetch karega
+    // - outstandingBefore/After calculate karega
+    // - status set karega (Partial/Full/Advance)
+    // - Over-payment block karega
+    const payment = await Payment.create(req.body);
 
-    const newPayment = new Payment({
-      ...req.body,
-
-      baleNos: [sale.baleNo],
-      totalInvoiceAmount: sale.sellingAmount
-    });
-
-    const saved = await newPayment.save();
+    // Sale ka paidAmount/balanceDue/paymentStatus refresh
+    await refreshSalePaymentStatus(payment.sale);
 
     res.status(201).json({
-      message: "Payment added",
-      data: saved
+      message: "Payment recorded successfully",
+      data: payment,
     });
-
-  } catch (error) {
+  } catch (err) {
     res.status(500).json({
       message: "Error adding payment",
-      error: error.message
+      error: err.message,
     });
   }
 });
 
-// get all payments
+/* ──────────────────────────────────────────────
+   2. LIST PAYMENTS — with optional filters
+   ────────────────────────────────────────────── */
 router.get("/", async (req, res) => {
   try {
-    const data = await Payment.find()
-      .populate("customer", "name")
-      .populate("paymentMode", "name")
-      .populate("company", "name")
-      .populate("sale")
-      .sort({ createdAt: -1 });
+    const filter = {};
+    if (req.query.customer) filter.customer = req.query.customer;
+    if (req.query.sale) filter.sale = req.query.sale;
+    if (req.query.status) filter.status = req.query.status;
 
-    res.status(200).json(data);
-
-  } catch (error) {
-    res.status(500).json({
-      message: "Error fetching payments",
-      error: error.message
-    });
-  }
-});
-
-// get single payment.
-
-router.get("/:id", async (req, res) => {
-  try {
-    const data = await Payment.findById(req.params.id);
-
-    if (!data) {
-      return res.status(404).json({ message: "Payment not found" });
+    // Date range
+    if (req.query.fromDate || req.query.toDate) {
+      filter.paymentDate = {};
+      if (req.query.fromDate) filter.paymentDate.$gte = new Date(req.query.fromDate);
+      if (req.query.toDate)   filter.paymentDate.$lte = new Date(req.query.toDate);
     }
 
-    res.status(200).json(data);
+    const data = await Payment.find(filter)
+      .populate("customer", "name code")
+      .populate("paymentMode", "name")
+      .populate("company", "name")
+      .populate("receivedBy", "name")
+      .populate("sale", "invoiceNo netAmount paymentStatus")
+      .sort({ createdAt: -1 });
 
-  } catch (error) {
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({
+      message: "Error fetching payments",
+      error: err.message,
+    });
+  }
+});
+
+/* ──────────────────────────────────────────────
+   3. STATS — for dashboard cards
+   ────────────────────────────────────────────── */
+router.get("/stats", async (req, res) => {
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [totalReceivedAgg, monthAgg, salesAgg] = await Promise.all([
+      Payment.aggregate([
+        { $group: { _id: null, total: { $sum: "$amountReceived" } } },
+      ]),
+      Payment.aggregate([
+        { $match: { paymentDate: { $gte: monthStart } } },
+        { $group: { _id: null, total: { $sum: "$amountReceived" } } },
+      ]),
+      Sales.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalInvoices: { $sum: "$netAmount" },
+            totalOutstanding: { $sum: "$balanceDue" },
+          },
+        },
+      ]),
+    ]);
+
+    res.json({
+      totalReceived:      totalReceivedAgg[0]?.total || 0,
+      monthCollection:    monthAgg[0]?.total || 0,
+      totalInvoices:      salesAgg[0]?.totalInvoices || 0,
+      totalOutstanding:   salesAgg[0]?.totalOutstanding || 0,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ──────────────────────────────────────────────
+   4. GET SINGLE PAYMENT
+   ────────────────────────────────────────────── */
+router.get("/:id", async (req, res) => {
+  try {
+    const data = await Payment.findById(req.params.id)
+      .populate("customer", "name code phone email gstNo")
+      .populate("paymentMode", "name")
+      .populate("company", "name")
+      .populate("receivedBy", "name")
+      .populate("sale", "invoiceNo saleDate netAmount paidAmount balanceDue paymentStatus");
+
+    if (!data) return res.status(404).json({ message: "Payment not found" });
+    res.json(data);
+  } catch (err) {
     res.status(500).json({
       message: "Error fetching payment",
-      error: error.message
+      error: err.message,
     });
   }
 });
 
-// delete payment
+/* ──────────────────────────────────────────────
+   5. UPDATE PAYMENT
+   ────────────────────────────────────────────── */
+router.put("/:id", async (req, res) => {
+  try {
+    const old = await Payment.findById(req.params.id);
+    if (!old) return res.status(404).json({ message: "Payment not found" });
 
+    // amountReceived ya sale change ho raha hai? track karo
+    const oldSaleId = old.sale;
+
+    // Direct update with new() doesn't trigger pre-save with right context
+    // To re-run all hooks, mutate the doc and save
+    Object.assign(old, req.body);
+    const updated = await old.save();   // pre-save hook chalega → outstandingBefore/After recalc
+
+    // Old sale ka status refresh (agar sale change hua hai)
+    if (oldSaleId && oldSaleId.toString() !== updated.sale.toString()) {
+      await refreshSalePaymentStatus(oldSaleId);
+    }
+    // New sale ka status refresh
+    await refreshSalePaymentStatus(updated.sale);
+
+    res.json({ message: "Payment updated", data: updated });
+  } catch (err) {
+    res.status(500).json({
+      message: "Error updating payment",
+      error: err.message,
+    });
+  }
+});
+
+/* ──────────────────────────────────────────────
+   6. DELETE PAYMENT
+   ────────────────────────────────────────────── */
 router.delete("/:id", async (req, res) => {
   try {
-    await Payment.findByIdAndDelete(req.params.id);
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
 
-    res.status(200).json({
-      message: "Payment deleted"
-    });
+    const saleId = payment.sale;
+    await payment.deleteOne();
 
-  } catch (error) {
+    // Sale status refresh — payment hatne ke baad
+    await refreshSalePaymentStatus(saleId);
+
+    res.json({ message: "Payment deleted, sale status updated" });
+  } catch (err) {
     res.status(500).json({
       message: "Error deleting payment",
-      error: error.message
+      error: err.message,
     });
   }
 });
-
 
 module.exports = router;

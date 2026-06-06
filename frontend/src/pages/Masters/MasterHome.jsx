@@ -127,9 +127,10 @@ const MASTERS = [
   { key: "uom",       title: "UOM",       subtitle: "Manage units of measurement", count: 8, countLabel: "Total UOMs",         icon: <Icon.Scale />,        color: "indigo" },
   { key: "company",   title: "Company",   subtitle: "Manage company details",    count: 1,   countLabel: "Total Companies",    icon: <Icon.Building />,     color: "violet" },
   { key: "container", title: "Container", subtitle: "Manage all containers",     count: 18,  countLabel: "Total Containers",   icon: <Icon.Container />,    color: "purple" },
-  { key: "currency",  title: "Currency",  subtitle: "Manage currencies",         count: 3,   countLabel: "Total Currencies",   icon: <Icon.DollarCircle />, color: "green"  },
-  { key: "weaver",    title: "Weaver",    subtitle: "Manage weavers",            count: 32,  countLabel: "Total Weavers",      icon: <Icon.Grid />,         color: "orange" },
-  { key: "transport", title: "Transport", subtitle: "Manage transporters",       count: 15,  countLabel: "Total Transporters", icon: <Icon.Truck />,        color: "blue"   },
+  { key: "customer",  title: "Customer",  subtitle: "Manage customers",          count: 24,  countLabel: "Total Customers",    icon: <Icon.Users />,        color: "blue"   },
+  { key: "paymentmode",    title: "Payment Mode",    subtitle: "Manage payment modes",            count: 32,  countLabel: "Total Payment Modes",      icon: <Icon.Grid />,         color: "orange" },
+  { key: "salesPerson", title: "Sales Person", subtitle: "Manage sales persons",       count: 15,  countLabel: "Total Sales Persons", icon: <Icon.Users />,        color: "blue"   },
+   { key: "transport", title: "Transport", subtitle: "Manage transporters",       count: 15,  countLabel: "Total Transporters", icon: <Icon.Truck />,        color: "blue"   },
 ];
 
 const STATS = [
@@ -180,7 +181,7 @@ export default function Masters({ onView, onAddNew }) {
             <div className="master-card__count">{m.count}</div>
             <div className="master-card__count-label">{m.countLabel}</div>
             <button className="master-card__btn" onClick={() => handleView(m.key)}>
-              View {m.title === "UOM" ? "UOMs" : m.title === "Currency" ? "Currencies" : m.title === "Company" ? "Companies" : m.title + "s"}
+              View {m.title === "UOM" ? "UOMs" : m.title === "Customer" ? "Customers" : m.title === "Company" ? "Companies" : m.title + "s"}
             </button>
           </div>
         ))}

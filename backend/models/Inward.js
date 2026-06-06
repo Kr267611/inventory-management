@@ -35,8 +35,11 @@ const inwardSchema = new mongoose.Schema(
     defaultColor:  { type: mongoose.Schema.Types.ObjectId, ref: "Color" }, // overall/default
     uom:           { type: mongoose.Schema.Types.ObjectId, ref: "UOM" },
     container:     { type: mongoose.Schema.Types.ObjectId, ref: "Container" },
-    processType:   { type: mongoose.Schema.Types.ObjectId, ref: "ProcessType" }, // ya enum
-
+    // processType:   { type: mongoose.Schema.Types.ObjectId, ref: "ProcessType" }, // ya enum
+    processType: {
+  type: String,
+  enum: ["DYEING", "PRINTING", "FINISHING"]
+}, 
     // Document refs
     challanNo:  String,
     invoiceNo:  String,
@@ -85,7 +88,7 @@ const inwardSchema = new mongoose.Schema(
 );
 
 // 🔥 AUTO-CALCULATIONS
-inwardSchema.pre("save", function (next) {
+inwardSchema.pre("save", function () {
   const pcs = this.pcsDetails || [];
 
   this.totalPcs   = pcs.length;
@@ -94,8 +97,6 @@ inwardSchema.pre("save", function (next) {
 
   this.greyAmount        = +(this.totalMeter * (this.rate || 0)).toFixed(2);
   this.baseCurrencyTotal = +(this.greyAmount * (this.exchangeRate || 1)).toFixed(2);
-
-  next();
 });
 
 // Same logic findOneAndUpdate ke liye bhi chahiye agar PATCH/PUT use kare

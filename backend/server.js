@@ -18,6 +18,7 @@ const supplierRoutes = require("./routes/supplierRoutes");
 const colorRoutes = require("./routes/colorRoutes");
 const designRoutes = require("./routes/designRoutes");
 const containerRoutes = require("./routes/containerRoutes");
+const PaymentmodeRoutes = require("./routes/paymentmodeRoutes");
 
 
 
@@ -29,6 +30,16 @@ app.use("/api/suppliers", supplierRoutes);
 app.use("/api/colors", colorRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/containers", containerRoutes);
+app.use("/api/paymentmode", PaymentmodeRoutes);
+
+// creating routes for transport, customer and sales person
+const transportRoutes = require("./routes/transportRoutes");
+const customerRoutes = require("./routes/customerRoutes");
+const salesPersonRoutes = require("./routes/salesPersonRoutes");
+
+app.use("/api/transport", transportRoutes);
+app.use("/api/customer", customerRoutes);
+app.use("/api/salesperson", salesPersonRoutes);
 
 // Inward routes
 const inwardRoutes = require("./routes/inwardRoutes");
@@ -57,6 +68,10 @@ app.use("/api/ledger", ledgerRoutes);
 // auth routes
 const authRoutes = require("./routes/authRoutes");
 app.use("/api/auth", authRoutes);
+
+// payment routes
+const paymentRoutes = require("./routes/paymentRoutes");
+app.use("/api/payment", paymentRoutes);
 
 // test route
 app.get("/", (req, res) => {

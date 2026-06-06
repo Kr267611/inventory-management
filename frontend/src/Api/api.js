@@ -1,11 +1,19 @@
 // src/api/api.js
 // Generic fetch wrapper — sab API calls yahaan se hoti hain
 
-// const BASE_URL = "http://localhost:5000/api";  // backend URL — change as per server
 const BASE_URL =
   process.env.REACT_APP_API_URL
     ? `${process.env.REACT_APP_API_URL}/api`
     : "http://localhost:5000/api";
+
+/**
+ * Token nikalne ka helper — localStorage se
+ */
+function getAuthHeaders() {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 /**
  * Internal request function — saare GET/POST/PUT/DELETE iske through chalte hain
  */
@@ -16,7 +24,7 @@ async function request(endpoint, options = {}) {
     method: options.method || "GET",
     headers: {
       "Content-Type": "application/json",
-      // Future me JWT chahiye toh: Authorization: `Bearer ${token}`
+      ...getAuthHeaders(),               // ← token auto-attach
       ...(options.headers || {}),
     },
   };
@@ -34,15 +42,32 @@ async function request(endpoint, options = {}) {
     // 204 No Content (DELETE me aksar aata hai) — body khaali hoti hai
     if (res.status === 204) return null;
 
-    // Response ko JSON me parse kar
-    const data = await res.json();
+    // 401 Unauthorized — token expired/invalid, clear kar do
+    if (res.status === 401) {
+     const hasToken = localStorage.getItem("token");
+      // localStorage.removeItem("token");
+     if (hasToken) {
+       throw new Error("Session expired. Please login again.");
+      }else{
+        throw new Error("Unauthorized. Please login.");
+      }
+      // Agar tu chahe toh login pe redirect kar de:
+      // window.location.href = "/login";
+      // throw new Error("Session expired. Please login again.");
+    }
+
+    // Content-type check — HTML/text response pe res.json() crash karta hai
+    const contentType = res.headers.get("content-type") || "";
+    const isJson = contentType.includes("application/json");
+    const data = isJson ? await res.json() : await res.text();
 
     // Agar status 2xx nahi hai toh error throw kar
     if (!res.ok) {
-      const message = data.error || data.message || `Request failed with status ${res.status}`;
+      const message = isJson
+        ? (data.error || data.message || `Request failed with status ${res.status}`)
+        : `HTTP ${res.status} - ${res.statusText}`;
       throw new Error(message);
     }
-
     return data;
   } catch (err) {
     // Network error ya parsing error
@@ -52,7 +77,7 @@ async function request(endpoint, options = {}) {
 }
 
 /**
- * Public API — components ye 4 methods use karenge
+ * Public API — components ye 5 methods use karenge
  */
 export const api = {
   get:    (endpoint)         => request(endpoint),
