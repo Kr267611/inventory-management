@@ -70,7 +70,7 @@ const authRoutes = require("./routes/authRoutes");
 app.use("/api/auth", authRoutes);
 
 // payment routes
-const paymentRoutes = require("./routes/paymentRoutes");
+const paymentRoutes = require("./routes/PaymentRoutes");
 app.use("/api/payment", paymentRoutes);
 
 // test route
