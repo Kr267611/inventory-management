@@ -18,7 +18,7 @@ const supplierRoutes = require("./routes/supplierRoutes");
 const colorRoutes = require("./routes/colorRoutes");
 const designRoutes = require("./routes/designRoutes");
 const containerRoutes = require("./routes/containerRoutes");
-const PaymentmodeRoutes = require("./routes/paymentmodeRoutes");
+const PaymentmodeRoutes = require("./routes/paymentModeRoutes");
 
 
 
