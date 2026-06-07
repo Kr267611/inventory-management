@@ -3,7 +3,7 @@ import { useState } from "react";
 import "./Sidebar.css";
 
 function Sidebar({ isOpen }) {
-  const [mastersOpen, setMastersOpen] = useState(true);
+  const [mastersOpen, setMastersOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
 
   return (

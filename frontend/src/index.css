@@ -12,14 +12,47 @@ code {
     monospace;
 }
 
+/* ============================================
+   GLOBAL CUSTOM SCROLLBAR — bulletproof version
+   ============================================ */
+
+/* Target HTML and BODY explicitly */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
 *::-webkit-scrollbar {
-  width: 10px !important;
+  width: 8px !important;
+  height: 8px !important;
 }
 
-*::-webkit-scrollbar-thumb {
-  background: #2563eb !important;
-}
-
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
 *::-webkit-scrollbar-track {
-  background: #e5e7eb !important;
+  background: #f1f5f9 !important;
+  border-radius: 10px !important;
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 10px !important;
+  transition: background 0.2s !important;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+
+html::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* Firefox */
+html, body, * {
+  scrollbar-width: thin !important;
+  scrollbar-color: #cbd5e1 #f1f5f9 !important;
 }
