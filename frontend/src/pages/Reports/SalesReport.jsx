@@ -100,9 +100,7 @@ export default function SalesReport() {
         setSales(salesData);
         setMasters({
           customers: mastersData.customers || [],
-          salesPersons: mastersData.
-salespersons
- || [],
+          salesPersons: mastersData.salespersons || [],
         });
       } catch (err) {
         alert("Failed to load: " + err.message);
