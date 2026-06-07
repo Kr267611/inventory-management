@@ -52,19 +52,19 @@ const paymentSchema = new mongoose.Schema({
 
 
 /* ──────── AUTO PAYMENT ID ──────── */
-paymentSchema.pre("validate", async function (next) {
-  if (this.paymentId) return next();
+paymentSchema.pre("validate", async function () {
+  if (this.paymentId) return ;
   const year = new Date().getFullYear();
   const count = await mongoose.model("Payment").countDocuments({
     paymentId: new RegExp(`^PAY-${year}-`),
   });
   this.paymentId = `PAY-${year}-${String(count + 1).padStart(4, "0")}`;
-  next();
+  // next();
 });
 
 
 /* ──────── AUTO CALCULATIONS ──────── */
-paymentSchema.pre("save", async function (next) {
+paymentSchema.pre("save", async function () {
   try {
     const Sale = mongoose.model("Sales");
 
@@ -108,9 +108,9 @@ paymentSchema.pre("save", async function (next) {
       ));
     }
 
-    next();
+    // next();
   } catch (err) {
-    next(err);
+    // next(err);
   }
 });
 

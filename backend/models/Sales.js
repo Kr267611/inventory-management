@@ -88,7 +88,7 @@ const salesSchema = new mongoose.Schema({
 
 
 /* ──────── AUTO CALCULATIONS ──────── */
-salesSchema.pre("save", function (next) {
+salesSchema.pre("save", function () {
   let gross = 0, disc = 0, pcsCount = 0, meterTotal = 0;
 
   this.items.forEach((it) => {
@@ -117,7 +117,7 @@ salesSchema.pre("save", function (next) {
   else if (this.paidAmount >= this.netAmount) this.paymentStatus = "Paid";
   else this.paymentStatus = "Partial";
 
-  next();
+    // next();
 });
 
 module.exports = mongoose.model("Sales", salesSchema);
