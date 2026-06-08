@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect , useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -120,7 +120,7 @@ export default function SummaryReport() {
   }, []);
 
   /* ──────── DATE FILTER ──────── */
-  const filterByDate = (list, dateField) => {
+  const filterByDate = useCallback((list, dateField) => {
     if (!dateRange.from && !dateRange.to) return list;
     return list.filter((item) => {
       const d = new Date(item[dateField] || item.createdAt);
@@ -136,11 +136,11 @@ export default function SummaryReport() {
       }
       return true;
     });
-  };
+  },[dateRange]);
 
-  const periodInwards  = useMemo(() => filterByDate(inwards, "entryDate"), [inwards, dateRange]);
-  const periodSales    = useMemo(() => filterByDate(sales, "saleDate"), [sales, dateRange]);
-  const periodPayments = useMemo(() => filterByDate(payments, "paymentDate"), [payments, dateRange]);
+  const periodInwards  = useMemo(() => filterByDate(inwards, "entryDate"), [inwards, filterByDate]);
+  const periodSales    = useMemo(() => filterByDate(sales, "saleDate"), [sales, filterByDate]);
+  const periodPayments = useMemo(() => filterByDate(payments, "paymentDate"), [payments, filterByDate]);
 
   /* ──────── BUSINESS METRICS ──────── */
   const metrics = useMemo(() => {
