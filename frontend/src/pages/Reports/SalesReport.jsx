@@ -69,6 +69,7 @@ const PAYMENT_STATUSES = ["", "Unpaid", "Partial", "Paid"];
 const EMPTY_FILTERS = {
   fromDate: "", toDate: "",
   customer: "", salesPerson: "", paymentStatus: "",
+  baleNo: "",                    // 🆕
   search: "",
 };
 
@@ -133,13 +134,21 @@ export default function SalesReport() {
     if (appliedFilters.paymentStatus) {
       list = list.filter((s) => s.paymentStatus === appliedFilters.paymentStatus);
     }
+    // 🆕 Bale No filter — check ANY item me match ho
+    if (appliedFilters.baleNo) {
+      const bale = appliedFilters.baleNo.toUpperCase().trim();
+      list = list.filter((s) =>
+        (s.items || []).some((it) => (it.baleNo || "").toUpperCase().includes(bale))
+      );
+    }
     if (appliedFilters.search) {
       const q = appliedFilters.search.toLowerCase();
       list = list.filter((s) =>
         (s.invoiceNo || "").toLowerCase().includes(q) ||
         (s.customer?.name || "").toLowerCase().includes(q) ||
         (s.gstNo || "").toLowerCase().includes(q) ||
-        (s.lrNo || "").toLowerCase().includes(q)
+        (s.lrNo || "").toLowerCase().includes(q) ||
+        (s.items || []).some((it) => (it.baleNo || "").toLowerCase().includes(q))   // 🆕 search me baleNo
       );
     }
 
@@ -184,29 +193,33 @@ export default function SalesReport() {
     if (filteredSales.length === 0) return alert("No data to export");
 
     const headers = [
-      "SR No.", "Date", "Invoice No", "Customer", "Sales Person",
+      "SR No.", "Date", "Invoice No", "Bales", "Customer", "Sales Person",
       "Total PCS", "Total Meter", "Gross Amount", "Discount", "Net Amount",
       "Paid", "Balance Due", "Payment Status",
     ];
 
-    const rows = filteredSales.map((s, idx) => [
-      idx + 1,
-      formatDate(s.saleDate || s.createdAt),
-      s.invoiceNo || "",
-      s.customer?.name || "",
-      s.salesPerson?.name || "",
-      s.totalPcs || 0,
-      s.totalMeter || 0,
-      s.grossAmount || 0,
-      s.discountTotal || 0,
-      s.netAmount || 0,
-      s.paidAmount || 0,
-      s.balanceDue || 0,
-      s.paymentStatus || "",
-    ]);
+    const rows = filteredSales.map((s, idx) => {
+      const bales = [...new Set((s.items || []).map((it) => it.baleNo).filter(Boolean))].join("; ");
+      return [
+        idx + 1,
+        formatDate(s.saleDate || s.createdAt),
+        s.invoiceNo || "",
+        bales || "",                       // 🆕
+        s.customer?.name || "",
+        s.salesPerson?.name || "",
+        s.totalPcs || 0,
+        s.totalMeter || 0,
+        s.grossAmount || 0,
+        s.discountTotal || 0,
+        s.netAmount || 0,
+        s.paidAmount || 0,
+        s.balanceDue || 0,
+        s.paymentStatus || "",
+      ];
+    });
 
     rows.push([
-      "", "", "", "", "TOTAL:",
+      "", "", "", "", "", "TOTAL:",        // 🆕 1 extra blank
       summary.totalPcs, summary.totalMeter.toFixed(2),
       "", "", summary.totalAmount.toFixed(2),
       summary.totalPaid.toFixed(2), summary.totalOutstanding.toFixed(2), "",
@@ -315,6 +328,16 @@ export default function SalesReport() {
               {PAYMENT_STATUSES.map((s) => <option key={s} value={s}>{s || "All Status"}</option>)}
             </select>
           </Field>
+          {/* 🆕 Bale No filter */}
+          <Field label="Bale No">
+            <input
+              className="srpt-input srpt-bale-input"
+              placeholder="e.g. A35, 1224"
+              value={filters.baleNo}
+              onChange={(e) => setF("baleNo", e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+            />
+          </Field>
           <Field label="Search" full>
             <div className="srpt-input-wrap">
               <span className="srpt-input__icon srpt-input__icon--left"><Icon.Search /></span>
@@ -376,6 +399,7 @@ export default function SalesReport() {
                   <th>SR No.</th>
                   <th>Date</th>
                   <th>Invoice No</th>
+                  <th>Bales</th>{/* 🆕 */}
                   <th>Customer</th>
                   <th>Sales Person</th>
                   <th className="srpt-th--right">PCS</th>
@@ -389,15 +413,34 @@ export default function SalesReport() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="12" className="srpt-td--empty">Loading...</td></tr>
+                  <tr><td colSpan="13" className="srpt-td--empty">Loading...</td></tr>
                 ) : filteredSales.length === 0 ? (
-                  <tr><td colSpan="12" className="srpt-td--empty">No sales in this period</td></tr>
+                  <tr><td colSpan="13" className="srpt-td--empty">No sales in this period</td></tr>
                 ) : (
                   filteredSales.map((s, idx) => (
                     <tr key={s._id}>
                       <td>{idx + 1}</td>
                       <td>{formatDate(s.saleDate || s.createdAt)}</td>
                       <td className="srpt-mono">{s.invoiceNo || "-"}</td>
+                      {/* 🆕 Bales cell — multiple chips */}
+                      <td>
+                        {(() => {
+                          const bales = [...new Set((s.items || []).map((it) => it.baleNo).filter(Boolean))];
+                          if (bales.length === 0) return <span className="srpt-muted">-</span>;
+                          return (
+                            <div className="srpt-bales-list">
+                              {bales.slice(0, 3).map((b) => (
+                                <span key={b} className="srpt-bale-chip">{b}</span>
+                              ))}
+                              {bales.length > 3 && (
+                                <span className="srpt-bale-more" title={bales.slice(3).join(", ")}>
+                                  +{bales.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="srpt-td--strong">{s.customer?.name || "-"}</td>
                       <td>{s.salesPerson?.name || "-"}</td>
                       <td className="srpt-td--right">{fmtInt(s.totalPcs)}</td>
@@ -428,7 +471,7 @@ export default function SalesReport() {
               {filteredSales.length > 0 && (
                 <tfoot>
                   <tr className="srpt-total-row">
-                    <td colSpan="5" className="srpt-td--strong">TOTAL</td>
+                    <td colSpan="6" className="srpt-td--strong">TOTAL</td>{/* 🆕 5→6 */}
                     <td className="srpt-td--right srpt-td--strong">{fmtInt(summary.totalPcs)}</td>
                     <td className="srpt-td--right srpt-td--strong">{fmtNum(summary.totalMeter)}</td>
                     <td className="srpt-td--right srpt-td--strong">{fmtNum(summary.totalAmount)}</td>
@@ -513,7 +556,7 @@ export default function SalesReport() {
           display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 12px; margin-bottom: 12px;
         }
-        .srpt-filters__row:last-child { margin-bottom: 0; grid-template-columns: 1fr 2fr auto; }
+        .srpt-filters__row:last-child { margin-bottom: 0; grid-template-columns: 1fr 1fr 2fr auto; }
         .srpt-filters__actions { display: flex; gap: 8px; align-items: flex-end; }
 
         .srpt-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -609,6 +652,38 @@ export default function SalesReport() {
         .srpt-paid { color: var(--srpt-success); font-weight: 600; }
         .srpt-balance-due { color: var(--srpt-danger); font-weight: 600; }
         .srpt-balance-zero { color: var(--srpt-success); font-weight: 600; }
+
+        /* 🆕 Bale chip + bale list */
+        .srpt-bales-list {
+          display: flex; flex-wrap: wrap; gap: 4px;
+          align-items: center;
+        }
+        .srpt-bale-chip {
+          display: inline-block;
+          padding: 2px 7px;
+          background: #dbeafe;
+          color: #1e40af;
+          border-radius: 5px;
+          font-family: ui-monospace, SFMono-Regular, monospace;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.3px;
+        }
+        .srpt-bale-more {
+          display: inline-block;
+          padding: 2px 7px;
+          background: #f1f5f9;
+          color: var(--srpt-muted);
+          border-radius: 5px;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: help;
+        }
+        .srpt-bale-input {
+          text-transform: uppercase;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+        }
 
         .srpt-badge {
           display: inline-block; padding: 3px 10px;

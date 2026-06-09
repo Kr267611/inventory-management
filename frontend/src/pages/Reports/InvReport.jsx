@@ -34,12 +34,15 @@ const STATUS_CHIPS = [
 ];
 
 const EMPTY_FILTERS = {
-  fabric: "", fabricQuality: "", color: "", location: "", search: "",
+  fabric: "", fabricQuality: "", color: "", location: "",
+  baleNo: "",                    // 🆕
+  search: "",
 };
 
 const getStatus = (inv) => {
-  if (inv.totalPcs <= 0) return "Out of Stock";
-  if (inv.totalPcs <= (inv.minStockPcs || 5)) return "Low Stock";
+  const avail = inv.availablePcs ?? inv.totalPcs ?? 0;       // 🆕 availablePcs use karo
+  if (avail <= 0) return "Out of Stock";
+  if (avail <= (inv.minStockPcs || 2)) return "Low Stock";    // 🆕 default 2 (new schema)
   return "In Stock";
 };
 
@@ -96,9 +99,17 @@ export default function InvReport() {
     if (appliedFilters.fabricQuality) list = list.filter((i) => (i.fabricQuality?._id || i.fabricQuality) === appliedFilters.fabricQuality);
     if (appliedFilters.color)         list = list.filter((i) => (i.color?._id || i.color) === appliedFilters.color);
     if (appliedFilters.location)      list = list.filter((i) => (i.location?._id || i.location) === appliedFilters.location);
+
+    // 🆕 Bale No filter
+    if (appliedFilters.baleNo) {
+      const bale = appliedFilters.baleNo.toUpperCase().trim();
+      list = list.filter((i) => (i.baleNo || "").toUpperCase().includes(bale));
+    }
+
     if (appliedFilters.search) {
       const q = appliedFilters.search.toLowerCase();
       list = list.filter((i) =>
+        (i.baleNo || "").toLowerCase().includes(q) ||                     // 🆕 baleNo in search
         (i.fabric?.name || "").toLowerCase().includes(q) ||
         (i.fabricQuality?.name || "").toLowerCase().includes(q) ||
         (i.color?.name || "").toLowerCase().includes(q) ||
@@ -106,14 +117,14 @@ export default function InvReport() {
       );
     }
 
-    return list.sort((a, b) => (b.totalPcs || 0) - (a.totalPcs || 0));
+    return list.sort((a, b) => (b.availablePcs || 0) - (a.availablePcs || 0));  // 🆕 sort by available
   }, [inventory, appliedFilters, statusChip]);
 
   /* ──────── SUMMARY ──────── */
   const summary = useMemo(() => {
     const totalItems = filteredInventory.length;
-    const totalPcs   = filteredInventory.reduce((s, i) => s + (i.totalPcs || 0), 0);
-    const totalMeter = filteredInventory.reduce((s, i) => s + (i.totalMeter || 0), 0);
+    const totalPcs   = filteredInventory.reduce((s, i) => s + (i.availablePcs || 0), 0);    // 🆕
+    const totalMeter = filteredInventory.reduce((s, i) => s + (i.availableMeter || 0), 0);  // 🆕
     const totalValue = filteredInventory.reduce((s, i) => s + (i.totalValue || 0), 0);
     const lowStock   = filteredInventory.filter((i) => getStatus(i) === "Low Stock").length;
     const outStock   = filteredInventory.filter((i) => getStatus(i) === "Out of Stock").length;
@@ -133,27 +144,37 @@ export default function InvReport() {
     if (filteredInventory.length === 0) return alert("No data to export");
 
     const headers = [
-      "SR No.", "Fabric / Item", "Quality", "Color", "Location",
-      "Total PCS", "Total Meter", "Avg Rate", "Total Value (INR)", "Min Stock", "Status",
+      "SR No.", "Bale No", "Fabric / Item", "Quality", "Color", "Location",
+      "Available PCS", "Total PCS", "Sold PCS",
+      "Available Meter", "Rate", "Total Value (INR)", "Min Stock", "Status",
     ];
 
-    const rows = filteredInventory.map((i, idx) => [
-      idx + 1,
-      i.fabric?.name || "",
-      i.fabricQuality?.name || "",
-      i.color?.name || "",
-      i.location?.name || "",
-      i.totalPcs || 0,
-      i.totalMeter || 0,
-      i.avgRate || 0,
-      i.totalValue || 0,
-      i.minStockPcs || 5,
-      getStatus(i),
-    ]);
+    const rows = filteredInventory.map((i, idx) => {
+      const avail = i.availablePcs ?? 0;
+      const total = i.totalPcs ?? 0;
+      const sold = Math.max(total - avail, 0);
+      return [
+        idx + 1,
+        i.baleNo || "",                   // 🆕
+        i.fabric?.name || "",
+        i.fabricQuality?.name || "",
+        i.color?.name || "",
+        i.location?.name || "",
+        avail,                            // 🆕 Available PCS
+        total,                            // 🆕 Total PCS
+        sold,                             // 🆕 Sold PCS
+        i.availableMeter || 0,            // 🆕
+        i.rate || 0,                      // 🆕 rate not avgRate
+        i.totalValue || 0,
+        i.minStockPcs || 2,
+        getStatus(i),
+      ];
+    });
 
     rows.push([
-      "", "", "", "", "TOTAL:",
-      summary.totalPcs, summary.totalMeter.toFixed(2), "", summary.totalValue.toFixed(2), "", "",
+      "", "", "", "", "", "TOTAL:",
+      summary.totalPcs, "", "",
+      summary.totalMeter.toFixed(2), "", summary.totalValue.toFixed(2), "", "",
     ]);
 
     const csvContent = [headers, ...rows]
@@ -248,6 +269,16 @@ export default function InvReport() {
         </div>
 
         <div className="invrpt-filters__row">
+          {/* 🆕 Bale No filter */}
+          <Field label="Bale No">
+            <input
+              className="invrpt-input invrpt-bale-input"
+              placeholder="e.g. A35, 1224"
+              value={filters.baleNo}
+              onChange={(e) => setF("baleNo", e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+            />
+          </Field>
           <Field label="Search" full>
             <div className="invrpt-input-wrap">
               <span className="invrpt-input__icon invrpt-input__icon--left"><Icon.Search /></span>
@@ -308,36 +339,46 @@ export default function InvReport() {
               <thead>
                 <tr>
                   <th>SR No.</th>
+                  <th>Bale No</th>{/* 🆕 */}
                   <th>Fabric / Item</th>
                   <th>Quality</th>
                   <th>Color</th>
                   <th>Location</th>
-                  <th className="invrpt-th--right">PCS</th>
-                  <th className="invrpt-th--right">Meter</th>
-                  <th className="invrpt-th--right">Avg Rate</th>
+                  <th className="invrpt-th--right">PCS (Avail/Total)</th>{/* 🆕 label */}
+                  <th className="invrpt-th--right">Avail. Meter</th>{/* 🆕 label */}
+                  <th className="invrpt-th--right">Rate</th>{/* 🆕 was "Avg Rate" */}
                   <th className="invrpt-th--right">Total Value</th>
                   <th className="invrpt-th--center">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="10" className="invrpt-td--empty">Loading...</td></tr>
+                  <tr><td colSpan="11" className="invrpt-td--empty">Loading...</td></tr>
                 ) : filteredInventory.length === 0 ? (
-                  <tr><td colSpan="10" className="invrpt-td--empty">No inventory matches these filters</td></tr>
+                  <tr><td colSpan="11" className="invrpt-td--empty">No inventory matches these filters</td></tr>
                 ) : (
                   filteredInventory.map((i, idx) => {
                     const status = getStatus(i);
                     const statusClass = status.toLowerCase().replace(/ /g, "-");
+                    const avail = i.availablePcs ?? 0;
+                    const total = i.totalPcs ?? 0;
+                    const sold = Math.max(total - avail, 0);
                     return (
                       <tr key={i._id}>
                         <td>{idx + 1}</td>
+                        <td>{i.baleNo ? <span className="invrpt-bale-chip">{i.baleNo}</span> : "-"}</td>{/* 🆕 */}
                         <td className="invrpt-td--strong">{i.fabric?.name || "-"}</td>
                         <td>{i.fabricQuality?.name || "-"}</td>
                         <td>{i.color?.name || "-"}</td>
                         <td>{i.location?.name || "-"}</td>
-                        <td className="invrpt-td--right">{fmtInt(i.totalPcs)}</td>
-                        <td className="invrpt-td--right">{fmtNum(i.totalMeter)}</td>
-                        <td className="invrpt-td--right">{fmtNum(i.avgRate)}</td>
+                        <td className="invrpt-td--right">
+                          <span className="invrpt-pcs-avail">{fmtInt(avail)}</span>
+                          <span className="invrpt-pcs-sep"> / </span>
+                          <span className="invrpt-pcs-total">{fmtInt(total)}</span>
+                          {sold > 0 && <div className="invrpt-pcs-sold">{sold} sold</div>}
+                        </td>
+                        <td className="invrpt-td--right">{fmtNum(i.availableMeter)}</td>{/* 🆕 */}
+                        <td className="invrpt-td--right">{fmtNum(i.rate)}</td>{/* 🆕 rate not avgRate */}
                         <td className="invrpt-td--right invrpt-td--strong">{fmtNum(i.totalValue)}</td>
                         <td className="invrpt-td--center">
                           <span className={`invrpt-badge invrpt-badge--${statusClass}`}>{status}</span>
@@ -350,7 +391,7 @@ export default function InvReport() {
               {filteredInventory.length > 0 && (
                 <tfoot>
                   <tr className="invrpt-total-row">
-                    <td colSpan="5" className="invrpt-td--strong">TOTAL</td>
+                    <td colSpan="6" className="invrpt-td--strong">TOTAL</td>{/* 🆕 5→6 */}
                     <td className="invrpt-td--right invrpt-td--strong">{fmtInt(summary.totalPcs)}</td>
                     <td className="invrpt-td--right invrpt-td--strong">{fmtNum(summary.totalMeter)}</td>
                     <td></td>
@@ -427,7 +468,7 @@ export default function InvReport() {
           display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 12px; margin-bottom: 12px;
         }
-        .invrpt-filters__row:last-child { margin-bottom: 0; grid-template-columns: 1fr 1fr 1fr auto; }
+        .invrpt-filters__row:last-child { margin-bottom: 0; grid-template-columns: 1fr 2fr auto; }
         .invrpt-filters__actions { display: flex; gap: 8px; align-items: flex-end; }
 
         .invrpt-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -528,6 +569,35 @@ export default function InvReport() {
         .invrpt-badge--in-stock     { background: #d1fae5; color: #047857; }
         .invrpt-badge--low-stock    { background: #ffedd5; color: #c2410c; }
         .invrpt-badge--out-of-stock { background: #fee2e2; color: #b91c1c; }
+
+        /* 🆕 Bale chip + input */
+        .invrpt-bale-chip {
+          display: inline-block;
+          padding: 3px 9px;
+          background: #dbeafe;
+          color: #1e40af;
+          border-radius: 6px;
+          font-family: ui-monospace, SFMono-Regular, monospace;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+        }
+        .invrpt-bale-input {
+          text-transform: uppercase;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+        }
+
+        /* 🆕 PCS available/total display */
+        .invrpt-pcs-avail { font-weight: 700; color: #0f172a; }
+        .invrpt-pcs-sep   { color: #cbd5e1; }
+        .invrpt-pcs-total { color: var(--invrpt-muted); font-size: 12px; }
+        .invrpt-pcs-sold {
+          font-size: 10px;
+          color: var(--invrpt-muted);
+          margin-top: 2px;
+          font-style: italic;
+        }
 
         .invrpt-total-row td {
           background: #f8fafc; padding: 14px 12px;

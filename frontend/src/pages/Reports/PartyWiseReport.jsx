@@ -76,7 +76,7 @@ const STATUS_FILTERS = [
 
 const EMPTY_FILTERS = {
   fromDate: "", toDate: "",
-  customer: "", search: "",
+  customer: "", baleNo: "", search: "",     // 🆕 baleNo
 };
 
 /* ================================================================
@@ -224,13 +224,26 @@ export default function PartyWiseReport() {
     if (appliedFilters.customer) {
       list = list.filter((l) => l.customer._id === appliedFilters.customer);
     }
+    // 🆕 Bale No filter — find customers who bought specific bale
+    if (appliedFilters.baleNo) {
+      const bale = appliedFilters.baleNo.toUpperCase().trim();
+      list = list.filter((l) =>
+        l.sales.some((s) =>
+          (s.items || []).some((it) => (it.baleNo || "").toUpperCase().includes(bale))
+        )
+      );
+    }
     if (appliedFilters.search) {
       const q = appliedFilters.search.toLowerCase();
       list = list.filter((l) =>
         (l.customer?.name || "").toLowerCase().includes(q) ||
         (l.customer?.phone || "").toLowerCase().includes(q) ||
         (l.customer?.gstNo || "").toLowerCase().includes(q) ||
-        (l.customer?.code || "").toLowerCase().includes(q)
+        (l.customer?.code || "").toLowerCase().includes(q) ||
+        // 🆕 search me bale bhi
+        l.sales.some((s) =>
+          (s.items || []).some((it) => (it.baleNo || "").toLowerCase().includes(q))
+        )
       );
     }
 
@@ -406,6 +419,16 @@ export default function PartyWiseReport() {
               <option value="">All Customers</option>
               {customers.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
             </select>
+          </Field>
+          {/* 🆕 Bale No filter — find customer by bale */}
+          <Field label="Bale No">
+            <input
+              className="pwrpt-input pwrpt-bale-input"
+              placeholder="e.g. A35"
+              value={filters.baleNo}
+              onChange={(e) => setF("baleNo", e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+            />
           </Field>
           <Field label="Search">
             <div className="pwrpt-input-wrap">
@@ -594,6 +617,7 @@ export default function PartyWiseReport() {
                       <tr>
                         <th>Date</th>
                         <th>Invoice</th>
+                        <th>Bales</th>{/* 🆕 */}
                         <th className="pwrpt-th--right">PCS</th>
                         <th className="pwrpt-th--right">Net Amount</th>
                         <th className="pwrpt-th--right">Paid</th>
@@ -603,12 +627,31 @@ export default function PartyWiseReport() {
                     </thead>
                     <tbody>
                       {detailModal.sales.length === 0 ? (
-                        <tr><td colSpan="7" className="pwrpt-td--empty">No sales</td></tr>
+                        <tr><td colSpan="8" className="pwrpt-td--empty">No sales</td></tr>
                       ) : (
                         detailModal.sales.map((s) => (
                           <tr key={s._id}>
                             <td>{formatDate(s.saleDate || s.createdAt)}</td>
                             <td className="pwrpt-mono">{s.invoiceNo}</td>
+                            {/* 🆕 Bales cell */}
+                            <td>
+                              {(() => {
+                                const bales = [...new Set((s.items || []).map((it) => it.baleNo).filter(Boolean))];
+                                if (bales.length === 0) return <span className="pwrpt-muted">-</span>;
+                                return (
+                                  <div className="pwrpt-bales-list">
+                                    {bales.slice(0, 3).map((b) => (
+                                      <span key={b} className="pwrpt-bale-chip">{b}</span>
+                                    ))}
+                                    {bales.length > 3 && (
+                                      <span className="pwrpt-bale-more" title={bales.slice(3).join(", ")}>
+                                        +{bales.length - 3}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </td>
                             <td className="pwrpt-td--right">{fmtInt(s.totalPcs)}</td>
                             <td className="pwrpt-td--right pwrpt-td--strong">{fmtNum(s.netAmount)}</td>
                             <td className="pwrpt-td--right pwrpt-paid">{fmtNum(s.paidAmount)}</td>
@@ -747,7 +790,7 @@ export default function PartyWiseReport() {
         .pwrpt-card__title { font-size: 15px; font-weight: 600; margin: 0; }
 
         .pwrpt-filters__row {
-          display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+          display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));   /* 🆕 4→5 */
           gap: 12px; margin-bottom: 12px;
         }
         .pwrpt-filters__actions {
@@ -784,12 +827,14 @@ export default function PartyWiseReport() {
           border-radius: 10px; padding: 12px 18px;
           display: flex; align-items: center; gap: 10px;
           font-size: 13px; color: #1e40af;
+          margin-bottom: 20px;
         }
         .pwrpt-period-banner svg { color: var(--pwrpt-primary); }
 
         .pwrpt-stats {
           display: grid; grid-template-columns: repeat(5, 1fr);
           gap: 12px;
+          margin-bottom: 20px;
         }
         .pwrpt-stat {
           background: var(--pwrpt-card); border: 1px solid var(--pwrpt-border);
@@ -862,6 +907,38 @@ export default function PartyWiseReport() {
         .pwrpt-mini-badge--paid    { background: #d1fae5; color: #047857; }
         .pwrpt-mini-badge--partial { background: #ffedd5; color: #c2410c; }
         .pwrpt-mini-badge--unpaid  { background: #fee2e2; color: #b91c1c; }
+
+        /* 🆕 Bale chip + bale list + input */
+        .pwrpt-bales-list {
+          display: flex; flex-wrap: wrap; gap: 4px;
+          align-items: center;
+        }
+        .pwrpt-bale-chip {
+          display: inline-block;
+          padding: 2px 7px;
+          background: #dbeafe;
+          color: #1e40af;
+          border-radius: 5px;
+          font-family: ui-monospace, SFMono-Regular, monospace;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.3px;
+        }
+        .pwrpt-bale-more {
+          display: inline-block;
+          padding: 2px 7px;
+          background: #f1f5f9;
+          color: var(--pwrpt-muted);
+          border-radius: 5px;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: help;
+        }
+        .pwrpt-bale-input {
+          text-transform: uppercase;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+        }
 
         .pwrpt-total-row td {
           background: #f8fafc; padding: 14px 12px;
@@ -945,6 +1022,9 @@ export default function PartyWiseReport() {
 
         @media (max-width: 1400px) {
           .pwrpt-stats { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 1300px) {
+          .pwrpt-filters__row { grid-template-columns: repeat(3, 1fr); }   /* 🆕 added breakpoint */
         }
         @media (max-width: 1100px) {
           .pwrpt-filters__row { grid-template-columns: repeat(2, 1fr); }

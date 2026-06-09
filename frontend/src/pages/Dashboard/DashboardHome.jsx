@@ -114,7 +114,7 @@ function DashboardHome() {
       {
         title: "Total Stock",
         value: fmtINR(inventoryStats.totalStockMtr) + " m",
-        change: inventoryStats.totalItems + " items",
+        change: inventoryStats.totalItems + " bales",   // 🆕 items → bales
         changeText: "in inventory",
         icon: "📦", color: "#2563eb", bg: "#dbeafe",
         positive: true,
@@ -150,6 +150,7 @@ function DashboardHome() {
   const recentInwards = useMemo(() => {
     return inwards.slice(0, 5).map((i) => ({
       date: formatDate(i.entryDate || i.createdAt),
+      baleNo: i.baleNo || "-",                    // 🆕
       supplier: i.supplier?.name || "-",
       item: i.fabric?.name || "-",
       qty: i.totalPcs || 0,
@@ -162,6 +163,8 @@ function DashboardHome() {
   const recentSales = useMemo(() => {
     return sales.slice(0, 5).map((s) => ({
       date: formatDate(s.saleDate || s.createdAt),
+      // 🆕 Unique bales from items
+      bales: [...new Set((s.items || []).map((it) => it.baleNo).filter(Boolean))],
       customer: s.customer?.name || "-",
       invoice: s.invoiceNo,
       qty: s.totalPcs || 0,
@@ -206,10 +209,11 @@ function DashboardHome() {
   /* ──────── LOW STOCK TABLE ──────── */
   const lowStock = useMemo(() => {
     return lowStockList.slice(0, 5).map((inv) => ({
+      baleNo: inv.baleNo || "-",                  // 🆕
       item: inv.fabric?.name || "-",
       color: inv.color?.name || "-",
-      available: inv.totalPcs || 0,
-      min: inv.minStockPcs || 5,
+      available: inv.availablePcs || 0,           // 🆕 BUG FIX: was totalPcs
+      min: inv.minStockPcs || 2,                  // 🆕 new schema default
     }));
   }, [lowStockList]);
 
@@ -280,6 +284,7 @@ function DashboardHome() {
               <thead>
                 <tr>
                   <th>Date</th>
+                  <th>Bale No</th>{/* 🆕 */}
                   <th>Supplier</th>
                   <th>Item</th>
                   <th>Qty</th>
@@ -289,11 +294,12 @@ function DashboardHome() {
               </thead>
               <tbody>
                 {recentInwards.length === 0 ? (
-                  <tr><td colSpan="6" className="dashboard-td-empty">No inward entries yet</td></tr>
+                  <tr><td colSpan="7" className="dashboard-td-empty">No inward entries yet</td></tr>
                 ) : (
                   recentInwards.map((row, i) => (
                     <tr key={i}>
                       <td>{row.date}</td>
+                      <td>{row.baleNo !== "-" ? <span className="dashboard-bale-chip">{row.baleNo}</span> : "-"}</td>{/* 🆕 */}
                       <td>{row.supplier}</td>
                       <td>{row.item}</td>
                       <td>{row.qty}</td>
@@ -320,8 +326,9 @@ function DashboardHome() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Customer</th>
                   <th>Invoice</th>
+                  <th>Bales</th>{/* 🆕 */}
+                  <th>Customer</th>
                   <th>Qty</th>
                   <th>Total</th>
                   <th>Status</th>
@@ -329,13 +336,28 @@ function DashboardHome() {
               </thead>
               <tbody>
                 {recentSales.length === 0 ? (
-                  <tr><td colSpan="6" className="dashboard-td-empty">No sales yet</td></tr>
+                  <tr><td colSpan="7" className="dashboard-td-empty">No sales yet</td></tr>
                 ) : (
                   recentSales.map((row, i) => (
                     <tr key={i}>
                       <td>{row.date}</td>
-                      <td>{row.customer}</td>
                       <td className="dashboard-td-invoice">{row.invoice}</td>
+                      {/* 🆕 Bales chips */}
+                      <td>
+                        {row.bales.length === 0 ? "-" : (
+                          <div className="dashboard-bales-list">
+                            {row.bales.slice(0, 2).map((b) => (
+                              <span key={b} className="dashboard-bale-chip">{b}</span>
+                            ))}
+                            {row.bales.length > 2 && (
+                              <span className="dashboard-bale-more" title={row.bales.slice(2).join(", ")}>
+                                +{row.bales.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td>{row.customer}</td>
                       <td>{row.qty}</td>
                       <td>{fmtINR(row.total)}</td>
                       <td>
@@ -388,6 +410,7 @@ function DashboardHome() {
             <table className="dashboard-table">
               <thead>
                 <tr>
+                  <th>Bale No</th>{/* 🆕 */}
                   <th>Item</th>
                   <th>Color</th>
                   <th>Available</th>
@@ -397,10 +420,11 @@ function DashboardHome() {
               </thead>
               <tbody>
                 {lowStock.length === 0 ? (
-                  <tr><td colSpan="5" className="dashboard-td-empty">All items well stocked 🎉</td></tr>
+                  <tr><td colSpan="6" className="dashboard-td-empty">All bales well stocked 🎉</td></tr>
                 ) : (
                   lowStock.map((row, i) => (
                     <tr key={i}>
+                      <td>{row.baleNo !== "-" ? <span className="dashboard-bale-chip">{row.baleNo}</span> : "-"}</td>{/* 🆕 */}
                       <td>{row.item}</td>
                       <td>{row.color}</td>
                       <td>{row.available}</td>
@@ -619,6 +643,33 @@ function DashboardHome() {
         }
         .dashboard-badge--low { background: #ffedd5; color: #c2410c; }
         .dashboard-badge--out { background: #fee2e2; color: #b91c1c; }
+
+        /* 🆕 BALE CHIP */
+        .dashboard-bales-list {
+          display: flex; flex-wrap: wrap; gap: 4px;
+          align-items: center;
+        }
+        .dashboard-bale-chip {
+          display: inline-block;
+          padding: 2px 8px;
+          background: #dbeafe;
+          color: #1e40af;
+          border-radius: 5px;
+          font-family: ui-monospace, SFMono-Regular, monospace;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.3px;
+        }
+        .dashboard-bale-more {
+          display: inline-block;
+          padding: 2px 7px;
+          background: #f1f5f9;
+          color: var(--dh-muted);
+          border-radius: 5px;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: help;
+        }
 
         /* CHART */
         .dashboard-chart-wrapper {

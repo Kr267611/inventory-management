@@ -9,9 +9,9 @@ function Sidebar({ isOpen }) {
   return (
     <aside className={`sidebar ${isOpen ? "open" : "closed"}`}>
       <div className="sidebar-logo">
-        <div className="logo-box">📦</div>
-  <h2>Bhaskar Silk Mills</h2>
-</div>
+       <img className="logo-box" src={`${process.env.PUBLIC_URL}/favicon.ico`} alt="Logo" />
+        <h2>Bhaskar Silk Mills</h2>
+      </div>
 
       <nav className="sidebar-nav">
         <NavLink to="/dashboard" end className="nav-item">

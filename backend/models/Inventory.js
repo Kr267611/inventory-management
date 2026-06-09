@@ -2,39 +2,64 @@ const mongoose = require("mongoose");
 
 const inventorySchema = new mongoose.Schema(
   {
-    // 🔑 COMPOSITE KEY — ye 4 combine se ek unique inventory record banta hai
-    fabric:        { type: mongoose.Schema.Types.ObjectId, ref: "Fabric",        required: true },
+    // 🆕 BALE-BASED — har bale ka apna inventory record
+    baleNo: {
+      type: String,
+      required: true,
+      unique: true,
+      uppercase: true,
+      trim: true,
+      index: true,
+    },
+
+    // 🔗 Source inward (1:1 relationship)
+    inward: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Inward",
+      required: true,
+    },
+
+    // 📋 SNAPSHOT fields from inward (fast lookup ke liye)
+    fabric:        { type: mongoose.Schema.Types.ObjectId, ref: "Fabric" },
     fabricQuality: { type: mongoose.Schema.Types.ObjectId, ref: "FabricQuality" },
+    design:        { type: mongoose.Schema.Types.ObjectId, ref: "Design" },
     color:         { type: mongoose.Schema.Types.ObjectId, ref: "Color" },
     location:      { type: mongoose.Schema.Types.ObjectId, ref: "Location" },
 
-    // 📊 AGGREGATED STOCK
-    totalPcs:    { type: Number, default: 0 },   // Available PCS (taka)
-    totalMeter:  { type: Number, default: 0 },   // Available meters
-    avgRate:     { type: Number, default: 0 },   // Weighted avg rate
-    totalValue:  { type: Number, default: 0 },   // totalMeter * avgRate
+    // 📊 QUANTITY TRACKING — initial vs current available
+    totalPcs:       { type: Number, default: 0 },  // jab inward aaya tab kitne the
+    availablePcs:   { type: Number, default: 0 },  // abhi kitne hain (sales pe ghatata hai)
+    totalMeter:     { type: Number, default: 0 },  // initial meter
+    availableMeter: { type: Number, default: 0 },  // current available meter
 
-    // 🎚 STOCK THRESHOLDS (for Low Stock / Out of Stock badges)
-    minStockPcs: { type: Number, default: 5 },
+    // 💰 RATE & VALUE
+    avgMeterPerPcs: { type: Number, default: 0 },  // average meter per piece
+    rate:           { type: Number, default: 0 },  // per meter rate (inward se)
+    totalValue:     { type: Number, default: 0 },  // availablePcs × avgMeterPerPcs × rate
 
-    // 🔗 Source tracking
-    inwards: [{ type: mongoose.Schema.Types.ObjectId, ref: "Inward" }],
+    // 🎚 STOCK THRESHOLD (for Low/Out badges)
+    minStockPcs: { type: Number, default: 2 },
   },
   { timestamps: true }
 );
 
-// Unique combo
-inventorySchema.index(
-  { fabric: 1, fabricQuality: 1, color: 1, location: 1 },
-  { unique: true }
-);
+// 🔥 PRE-SAVE: totalValue auto-compute
+inventorySchema.pre("save", function () {
+  this.totalValue = +(
+    (this.availablePcs || 0) *
+    (this.avgMeterPerPcs || 0) *
+    (this.rate || 0)
+  ).toFixed(2);
+  // next();
+});
 
-// 🔥 HELPER: Stock status compute karne ke liye
+// 🔥 VIRTUAL: Stock status based on availablePcs (not totalPcs)
 inventorySchema.virtual("status").get(function () {
-  if (this.totalPcs <= 0) return "Out of Stock";
-  if (this.totalPcs <= this.minStockPcs) return "Low Stock";
+  if (this.availablePcs <= 0) return "Out of Stock";
+  if (this.availablePcs <= this.minStockPcs) return "Low Stock";
   return "In Stock";
 });
 inventorySchema.set("toJSON", { virtuals: true });
+inventorySchema.set("toObject", { virtuals: true });
 
 module.exports = mongoose.model("Inventory", inventorySchema);

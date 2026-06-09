@@ -15,6 +15,7 @@ export const inventoryApi = {
   },
 
   getStats: () => api.get("/inventory/stats"),
+  lookupByBale:(baleNo) => api.get(`/inventory/lookup/bale/${baleNo}`),
 
   // For Sales form — stock check before adding item
   checkStock: ({ fabric, fabricQuality, color, location }) => {

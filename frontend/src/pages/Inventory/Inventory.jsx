@@ -44,14 +44,21 @@ const Icon = {
       <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
     </svg>
   ),
+  Tag: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <line x1="7" y1="7" x2="7.01" y2="7" />
+    </svg>
+  ),
 };
 
 const STOCK_TYPES = ["All Stock", "In Stock", "Low Stock", "Out of Stock"];
 
 const EMPTY_FILTERS = {
   search: "",
+  baleNo: "",                       // 🆕 Bale No search
   fabric: "All Fabrics",
-  fabricQuality: "All Quality",     // 👈 backend ke saath naam match
+  fabricQuality: "All Quality",
   color: "All Color",
   location: "All Locations",
   stockType: "All Stock",
@@ -61,6 +68,20 @@ const EMPTY_FILTERS = {
 
 const fmtNum = (n) =>
   Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtInt = (n) => Number(n || 0).toLocaleString("en-IN");
+
+/* Clean filter values before API call — remove "All X" placeholders */
+const cleanFilters = (f) => {
+  const out = {};
+  if (f.search) out.search = f.search;
+  if (f.baleNo) out.baleNo = f.baleNo.toUpperCase().trim();
+  if (f.fabric && f.fabric !== "All Fabrics") out.fabric = f.fabric;
+  if (f.fabricQuality && f.fabricQuality !== "All Quality") out.fabricQuality = f.fabricQuality;
+  if (f.color && f.color !== "All Color") out.color = f.color;
+  if (f.location && f.location !== "All Locations") out.location = f.location;
+  if (f.stockType && f.stockType !== "All Stock") out.stockType = f.stockType;
+  return out;
+};
 
 /* ================================================================
    MAIN
@@ -73,6 +94,7 @@ const Inventory = () => {
 
   const [stats, setStats] = useState({
     totalItems: 0,
+    totalStockPcs: 0,
     totalStockMtr: 0,
     totalValue: 0,
     lowStockItems: 0,
@@ -109,8 +131,9 @@ const Inventory = () => {
   const loadInventory = async (filterObj = filters) => {
     try {
       setLoading(true);
+      const cleaned = cleanFilters(filterObj);
       const [inventoryData, statsData] = await Promise.all([
-        inventoryApi.getAll(filterObj),
+        inventoryApi.getAll(cleaned),
         inventoryApi.getStats(),
       ]);
       setInventory(inventoryData);
@@ -129,13 +152,42 @@ const Inventory = () => {
     loadInventory(EMPTY_FILTERS);
   };
 
-  /* ──────── STAT CARDS — real data se ──────── */
+  /* ──────── VIEW BALE DETAILS ──────── */
+  const viewBale = (r) => {
+    const soldPcs = (r.totalPcs || 0) - (r.availablePcs || 0);
+    const soldMeter = (r.totalMeter || 0) - (r.availableMeter || 0);
+    alert(
+      `🏷 BALE: ${r.baleNo}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Fabric:    ${r.fabric?.name || "-"}\n` +
+      `Quality:   ${r.fabricQuality?.name || "-"}\n` +
+      `Color:     ${r.color?.name || "-"}\n` +
+      `Location:  ${r.location?.name || "-"}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Initial PCS:    ${r.totalPcs}\n` +
+      `Available PCS:  ${r.availablePcs}\n` +
+      `Sold PCS:       ${soldPcs}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Initial Meter:    ${fmtNum(r.totalMeter)}\n` +
+      `Available Meter:  ${fmtNum(r.availableMeter)}\n` +
+      `Sold Meter:       ${fmtNum(soldMeter)}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Rate (Per Mtr):  ₹ ${fmtNum(r.rate)}\n` +
+      `Avg Meter/PCS:   ${fmtNum(r.avgMeterPerPcs)}\n` +
+      `Total Value:     ₹ ${fmtNum(r.totalValue)}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Source Voucher: ${r.inward?.voucherNo || "-"}`
+    );
+  };
+
+  /* ──────── STAT CARDS ──────── */
   const STAT_CARDS = [
-    { label: "Total Items",        value: String(stats.totalItems),         hint: "Unique Items",        tone: "default" },
-    { label: "Total Stock (Mtr)",  value: fmtNum(stats.totalStockMtr),      hint: "In Stock",            tone: "default" },
-    { label: "Total Value (INR)",  value: "₹ " + fmtNum(stats.totalValue),  hint: "Stock Value",         tone: "default" },
-    { label: "Low Stock Items",    value: String(stats.lowStockItems),      hint: "Below Minimum Level", tone: "warning" },
-    { label: "Out of Stock Items", value: String(stats.outOfStockItems),    hint: "No Stock Available",  tone: "danger"  },
+    { label: "Total Bales",        value: String(stats.totalItems),              hint: "Unique Bales",        tone: "default" },
+    { label: "Available PCS",      value: fmtInt(stats.totalStockPcs || 0),      hint: "Current Stock",       tone: "default" },
+    { label: "Available Meter",    value: fmtNum(stats.totalStockMtr),           hint: "In Stock",            tone: "default" },
+    { label: "Total Value (INR)",  value: "₹ " + fmtNum(stats.totalValue),       hint: "Stock Value",         tone: "default" },
+    { label: "Low Stock",          value: String(stats.lowStockItems),           hint: "Below Minimum",       tone: "warning" },
+    { label: "Out of Stock",       value: String(stats.outOfStockItems),         hint: "Zero Stock",          tone: "danger"  },
   ];
 
   return (
@@ -143,7 +195,7 @@ const Inventory = () => {
       {/* HEADER */}
       <div className="inv-page__header">
         <div>
-          <h1 className="inv-page__title">Inventory / Stock Summary</h1>
+          <h1 className="inv-page__title">Inventory / Bale-wise Stock</h1>
           <div className="inv-breadcrumb">
             <span>Home</span>
             <span className="inv-breadcrumb__sep">/</span>
@@ -151,13 +203,13 @@ const Inventory = () => {
           </div>
         </div>
         <div className="inv-page__actions">
-          <button className="inv-btn inv-btn--ghost" onClick={() => alert("Stock Ledger (mock)")}>
+          <button className="inv-btn inv-btn--ghost" onClick={() => alert("Stock Ledger (coming soon)")}>
             <Icon.Book /><span>Stock Ledger</span>
           </button>
           <button className="inv-btn inv-btn--ghost" onClick={resetFilters}>
             <Icon.Refresh /><span>Reset</span>
           </button>
-          <button className="inv-btn inv-btn--primary" onClick={() => alert("Export (mock)")}>
+          <button className="inv-btn inv-btn--primary" onClick={() => alert("Export (use Reports → Inventory Report)")}>
             <Icon.Download /><span>Export</span>
           </button>
         </div>
@@ -177,13 +229,28 @@ const Inventory = () => {
       {/* FILTERS */}
       <div className="inv-card inv-filters">
         <div className="inv-filters__row">
+          {/* 🆕 BALE NO SEARCH - prominent first field */}
+          <Field label="Bale No">
+            <div className="inv-input-wrap">
+              <span className="inv-input__icon inv-input__icon--left"><Icon.Tag /></span>
+              <input
+                className="inv-input inv-input--with-left-icon inv-bale-search"
+                placeholder="e.g. A35, 1224..."
+                value={filters.baleNo}
+                onChange={(e) => setF("baleNo", e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              />
+            </div>
+          </Field>
+
           <Field label="Search Item">
             <div className="inv-input-wrap">
               <input
                 className="inv-input inv-input--with-icon"
-                placeholder="Search by fabric, quality, color..."
+                placeholder="Fabric, quality, color..."
                 value={filters.search}
                 onChange={(e) => setF("search", e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
               />
               <span className="inv-input__icon"><Icon.Search /></span>
             </div>
@@ -215,7 +282,9 @@ const Inventory = () => {
               ))}
             </select>
           </Field>
+        </div>
 
+        <div className="inv-filters__row inv-filters__row--bottom">
           <Field label="Location">
             <select className="inv-input" value={filters.location} onChange={(e) => setF("location", e.target.value)}>
               <option value="All Locations">All Locations</option>
@@ -224,9 +293,6 @@ const Inventory = () => {
               ))}
             </select>
           </Field>
-        </div>
-
-        <div className="inv-filters__row inv-filters__row--bottom">
           <Field label="Stock Type">
             <select className="inv-input" value={filters.stockType} onChange={(e) => setF("stockType", e.target.value)}>
               {STOCK_TYPES.map((o) => <option key={o}>{o}</option>)}
@@ -251,52 +317,67 @@ const Inventory = () => {
 
       {/* TABLE */}
       <div className="inv-card">
-        <h2 className="inv-card__title">Inventory List</h2>
+        <div className="inv-card__head">
+          <h2 className="inv-card__title">Bale-wise Inventory</h2>
+          <span className="inv-card__count">{inventory.length} bales</span>
+        </div>
 
         <div className="inv-table-wrap">
           <table className="inv-table">
             <thead>
               <tr>
                 <th>SR No.</th>
+                <th>Bale No</th>
                 <th>Item / Fabric</th>
                 <th>Quality</th>
                 <th>Color</th>
-                <th className="inv-th--right">PCS (Taka)</th>
+                <th className="inv-th--right">PCS (Avail / Total)</th>
                 <th className="inv-th--right">Meter (Avg/PCS)</th>
-                <th className="inv-th--right">Total Meter</th>
+                <th className="inv-th--right">Available Meter</th>
                 <th className="inv-th--right">Rate (Per Mtr)</th>
                 <th className="inv-th--right">Total Value (INR)</th>
                 <th>Location</th>
-                <th className="inv-th--center">Available Stock</th>
+                <th className="inv-th--center">Stock Status</th>
                 <th className="inv-th--center">Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="12" className="inv-td--empty">Loading...</td></tr>
+                <tr><td colSpan="13" className="inv-td--empty">Loading...</td></tr>
               ) : inventory.length === 0 ? (
-                <tr><td colSpan="12" className="inv-td--empty">No inventory items found</td></tr>
+                <tr><td colSpan="13" className="inv-td--empty">No bales found</td></tr>
               ) : (
                 inventory.map((r, idx) => {
-                  // Status compute karo (backend virtual may not always serialize)
+                  // Status compute karo (availablePcs ke base pe)
+                  const minStock = r.minStockPcs || 2;
                   const status =
-                    r.totalPcs <= 0 ? "Out of Stock" :
-                    r.totalPcs <= (r.minStockPcs || 5) ? "Low Stock" :
+                    r.availablePcs <= 0 ? "Out of Stock" :
+                    r.availablePcs <= minStock ? "Low Stock" :
                     "In Stock";
 
-                  const avgMeterPerPcs = r.totalPcs ? r.totalMeter / r.totalPcs : 0;
+                  const soldPcs = (r.totalPcs || 0) - (r.availablePcs || 0);
 
                   return (
                     <tr key={r._id} className="inv-tr">
                       <td>{idx + 1}</td>
+                      <td>
+                        <span className="inv-bale-chip">{r.baleNo}</span>
+                      </td>
                       <td className="inv-td--strong">{r.fabric?.name || "-"}</td>
                       <td>{r.fabricQuality?.name || "-"}</td>
                       <td>{r.color?.name || "-"}</td>
-                      <td className="inv-td--right">{r.totalPcs}</td>
-                      <td className="inv-td--right">{fmtNum(avgMeterPerPcs)}</td>
-                      <td className="inv-td--right">{fmtNum(r.totalMeter)}</td>
-                      <td className="inv-td--right">{r.avgRate ? fmtNum(r.avgRate) : "-"}</td>
-                      <td className="inv-td--right">{fmtNum(r.totalValue)}</td>
+                      <td className="inv-td--right">
+                        <span className={`inv-pcs-display ${r.availablePcs <= 0 ? "inv-pcs-display--out" : r.availablePcs <= minStock ? "inv-pcs-display--low" : ""}`}>
+                          {r.availablePcs} <span className="inv-pcs-display__sep">/</span> <span className="inv-pcs-display__total">{r.totalPcs}</span>
+                        </span>
+                        {soldPcs > 0 && (
+                          <div className="inv-pcs-sold">{soldPcs} sold</div>
+                        )}
+                      </td>
+                      <td className="inv-td--right">{fmtNum(r.avgMeterPerPcs)}</td>
+                      <td className="inv-td--right">{fmtNum(r.availableMeter)}</td>
+                      <td className="inv-td--right">{r.rate ? fmtNum(r.rate) : "-"}</td>
+                      <td className="inv-td--right inv-td--strong">{fmtNum(r.totalValue)}</td>
                       <td>{r.location?.name || "-"}</td>
                       <td className="inv-td--center">
                         <span className={`inv-badge inv-badge--${status.toLowerCase().replace(/ /g, "-")}`}>
@@ -306,19 +387,8 @@ const Inventory = () => {
                       <td className="inv-td--center">
                         <button
                           className="inv-icon-btn inv-icon-btn--view"
-                          title="View"
-                          onClick={() =>
-                            alert(
-                              `${r.fabric?.name || "-"}\n` +
-                              `Quality: ${r.fabricQuality?.name || "-"}\n` +
-                              `Color: ${r.color?.name || "-"}\n` +
-                              `Location: ${r.location?.name || "-"}\n\n` +
-                              `Available PCS: ${r.totalPcs}\n` +
-                              `Total Meter: ${fmtNum(r.totalMeter)}\n` +
-                              `Avg Rate: ₹${fmtNum(r.avgRate)}\n` +
-                              `Total Value: ₹${fmtNum(r.totalValue)}`
-                            )
-                          }
+                          title="View bale details"
+                          onClick={() => viewBale(r)}
                         >
                           <Icon.Eye />
                         </button>
@@ -334,7 +404,7 @@ const Inventory = () => {
         {/* Pagination */}
         <div className="inv-pagination">
           <div className="inv-pagination__info">
-            Showing {inventory.length === 0 ? 0 : 1} to {inventory.length} of {inventory.length} entries
+            Showing {inventory.length === 0 ? 0 : 1} to {inventory.length} of {inventory.length} bales
           </div>
           <div className="inv-pagination__controls">
             <button className="inv-page-btn" disabled>Previous</button>
@@ -348,7 +418,7 @@ const Inventory = () => {
       <div className="inv-flow">
         <Icon.Info />
         <span>
-          <strong>Flow:</strong> Inward Entry → Stock added in Inventory → Sales → Stock reduced automatically
+          <strong>Flow:</strong> Inward (with Bale No) → Bale created in Inventory → Sales by Bale No → Available PCS reduces automatically
         </span>
       </div>
 
@@ -405,29 +475,34 @@ const Inventory = () => {
         .inv-icon-btn--view:hover { background: #dbeafe; }
 
         .inv-stats {
-          display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 14px; margin-bottom: 18px;
+          display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+          gap: 12px; margin-bottom: 18px;
         }
         .inv-stat {
           background: var(--iv-card); border: 1px solid var(--iv-border);
-          border-radius: 12px; padding: 16px 18px;
+          border-radius: 12px; padding: 14px 16px;
           box-shadow: var(--iv-shadow);
         }
-        .inv-stat__label { font-size: 13px; color: var(--iv-muted); margin-bottom: 8px; }
+        .inv-stat__label { font-size: 12px; color: var(--iv-muted); margin-bottom: 6px; }
         .inv-stat__value {
-          font-size: 22px; font-weight: 700; color: var(--iv-text);
-          margin-bottom: 6px; line-height: 1.2;
+          font-size: 20px; font-weight: 700; color: var(--iv-text);
+          margin-bottom: 4px; line-height: 1.2;
         }
-        .inv-stat__value--warning { color: var(--iv-danger); }
+        .inv-stat__value--warning { color: var(--iv-warning); }
         .inv-stat__value--danger  { color: var(--iv-danger); }
-        .inv-stat__hint { font-size: 12px; color: var(--iv-muted); }
+        .inv-stat__hint { font-size: 11px; color: var(--iv-muted); }
 
         .inv-card {
           background: var(--iv-card); border: 1px solid var(--iv-border);
           border-radius: 12px; padding: 20px;
           box-shadow: var(--iv-shadow); margin-bottom: 18px;
         }
-        .inv-card__title { font-size: 15px; font-weight: 600; margin: 0 0 16px 0; }
+        .inv-card__head {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 16px;
+        }
+        .inv-card__title { font-size: 15px; font-weight: 600; margin: 0; }
+        .inv-card__count { font-size: 13px; color: var(--iv-muted); }
 
         .inv-filters__row {
           display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -435,7 +510,7 @@ const Inventory = () => {
         }
         .inv-filters__row:last-child { margin-bottom: 0; }
         .inv-filters__row--bottom {
-          grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
           align-items: end;
         }
         .inv-filters__actions { display: flex; gap: 8px; }
@@ -458,14 +533,29 @@ const Inventory = () => {
         .inv-input::placeholder { color: #94a3b8; }
         .inv-input-wrap { position: relative; }
         .inv-input--with-icon { padding-right: 36px; }
+        .inv-input--with-left-icon { padding-left: 36px; }
         .inv-input__icon {
           position: absolute; right: 10px; top: 50%;
           transform: translateY(-50%);
           color: var(--iv-muted); pointer-events: none;
         }
+        .inv-input__icon--left { left: 10px; right: auto; }
+
+        /* 🆕 Bale search field — slightly highlighted */
+        .inv-bale-search {
+          text-transform: uppercase;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+          border-color: #bfdbfe !important;
+          background: #f8faff !important;
+        }
+        .inv-bale-search:focus {
+          background: #fff !important;
+          border-color: var(--iv-primary) !important;
+        }
 
         .inv-table-wrap { overflow-x: auto; }
-        .inv-table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+        .inv-table { width: 100%; border-collapse: collapse; min-width: 1300px; }
         .inv-table th {
           background: #f8fafc; padding: 12px 14px;
           font-size: 11px; font-weight: 600;
@@ -488,6 +578,39 @@ const Inventory = () => {
         .inv-td--center { text-align: center; }
         .inv-td--strong { font-weight: 600; }
         .inv-td--empty { text-align: center; color: var(--iv-muted); padding: 40px !important; }
+
+        /* 🆕 Bale chip in table */
+        .inv-bale-chip {
+          display: inline-block;
+          padding: 4px 10px;
+          background: #dbeafe;
+          color: #1e40af;
+          border-radius: 6px;
+          font-family: ui-monospace, SFMono-Regular, monospace;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+        }
+
+        /* 🆕 PCS display — "available / total" */
+        .inv-pcs-display {
+          font-weight: 600;
+          color: var(--iv-success);
+        }
+        .inv-pcs-display--low { color: var(--iv-warning); }
+        .inv-pcs-display--out { color: var(--iv-danger); }
+        .inv-pcs-display__sep { color: #cbd5e1; font-weight: 400; margin: 0 2px; }
+        .inv-pcs-display__total {
+          color: var(--iv-muted);
+          font-weight: 500;
+          font-size: 12px;
+        }
+        .inv-pcs-sold {
+          font-size: 10px;
+          color: var(--iv-muted);
+          margin-top: 2px;
+          font-style: italic;
+        }
 
         .inv-badge {
           display: inline-block; padding: 4px 12px;

@@ -60,11 +60,18 @@ const Icon = {
       <polyline points="20 6 9 17 4 12" />
     </svg>
   ),
+  Tag: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <line x1="7" y1="7" x2="7.01" y2="7" />
+    </svg>
+  ),
 };
 
 const EMPTY_FORM = {
   entryDate: new Date().toISOString().slice(0, 10),
   voucherNo: "",
+  baleNo: "",                                       // 🆕 BALE NO
   company: "", location: "", supplier: "",
   fabric: "", fabricQuality: "", design: "", defaultColor: "",
   uom: "", processType: "",
@@ -113,6 +120,7 @@ export default function InwardEntry() {
           setForm({
             entryDate: inw.entryDate?.slice(0, 10) || "",
             voucherNo: inw.voucherNo || "",
+            baleNo: inw.baleNo || "",                    // 🆕 load bale no
             company: inw.company?._id || inw.company || "",
             location: inw.location?._id || inw.location || "",
             supplier: inw.supplier?._id || inw.supplier || "",
@@ -222,6 +230,7 @@ export default function InwardEntry() {
   /* ──────── SAVE / UPDATE ──────── */
   const handleSave = async () => {
     if (!form.voucherNo) return alert("Voucher No daalo");
+    if (!form.baleNo) return alert("Bale No daalo (e.g. A35, 1224)");   // 🆕 validation
     if (!form.supplier) return alert("Supplier select karo");
     if (!form.fabric) return alert("Fabric select karo");
     if (!form.rate || parseFloat(form.rate) <= 0) return alert("Grey Rate enter karo");
@@ -229,6 +238,7 @@ export default function InwardEntry() {
 
     const payload = {
       ...form,
+      baleNo: form.baleNo.toUpperCase().trim(),         // 🆕 always uppercase
       rate: parseFloat(form.rate) || 0,
       exchangeRate: parseFloat(form.exchangeRate) || 1,
       weight: parseFloat(form.weight) || 0,
@@ -238,8 +248,9 @@ export default function InwardEntry() {
         color: p.color || form.defaultColor || undefined,
       })),
     };
-     
+
     console.log("Payload to save:", payload);
+
     // Empty optional ObjectId fields ko bhejna nahi (warna Mongoose cast error)
     ["fabricQuality", "design", "defaultColor", "uom", "processType", "container"].forEach((k) => {
       if (!payload[k]) delete payload[k];
@@ -302,6 +313,27 @@ export default function InwardEntry() {
       <div className="inward-content">
         {/* LEFT */}
         <div className="inward-content__left">
+          {/* 🆕 BALE NO highlighted banner */}
+          <section className="inward-card inward-bale-card">
+            <div className="inward-bale-row">
+              <div className="inward-bale-icon"><Icon.Tag /></div>
+              <div className="inward-bale-label">
+                <div className="inward-bale-label__title">Bale Number <span className="inward-field__required">*</span></div>
+                <div className="inward-bale-label__hint">
+                  Unique physical identifier for this bale (e.g. A35, A59, 1224, 163)
+                </div>
+              </div>
+              <input
+                className="inward-input inward-bale-input"
+                placeholder="A35"
+                value={form.baleNo}
+                onChange={(e) => handle("baleNo", e.target.value.toUpperCase())}
+                disabled={!!editId}
+                title={editId ? "Bale No cannot be changed in edit mode" : ""}
+              />
+            </div>
+          </section>
+
           {/* Inward Information */}
           <section className="inward-card">
             <h2 className="inward-card__title">Inward Information</h2>
@@ -492,6 +524,15 @@ export default function InwardEntry() {
         <aside className="inward-content__right">
           <section className="inward-card">
             <h2 className="inward-card__title">Inward Summary</h2>
+
+            {/* 🆕 Bale No display in summary */}
+            {form.baleNo && (
+              <div className="inward-bale-summary">
+                <div className="inward-bale-summary__label">Bale No</div>
+                <div className="inward-bale-summary__value">{form.baleNo}</div>
+              </div>
+            )}
+
             <div className="inward-summary-grid">
               <SummaryBox label="Total PCS (Taka)" value={summary.totalPcs} />
               <SummaryBox label="Total Meter" value={summary.totalMeter} />
@@ -571,6 +612,41 @@ export default function InwardEntry() {
         }
         .inward-card__title { font-size: 16px; font-weight: 600; margin: 0 0 18px 0; }
         .inward-card__title--inline { margin: 0; }
+
+        /* 🆕 BALE CARD — highlighted top section */
+        .inward-bale-card {
+          background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+          border: 1px solid #bfdbfe;
+        }
+        .inward-bale-row {
+          display: flex; align-items: center; gap: 16px;
+          flex-wrap: wrap;
+        }
+        .inward-bale-icon {
+          width: 48px; height: 48px; flex-shrink: 0;
+          border-radius: 12px;
+          background: var(--inw-primary); color: #fff;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .inward-bale-icon svg { width: 22px; height: 22px; }
+        .inward-bale-label { flex: 1; min-width: 200px; }
+        .inward-bale-label__title { font-size: 15px; font-weight: 600; color: var(--inw-text); }
+        .inward-bale-label__hint { font-size: 12px; color: var(--inw-muted); margin-top: 2px; }
+        .inward-bale-input {
+          flex: 0 0 220px;
+          font-size: 18px !important;
+          font-weight: 700 !important;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          padding: 12px 16px !important;
+          border: 2px solid var(--inw-primary) !important;
+          background: #fff;
+        }
+        .inward-bale-input:disabled {
+          background: #f1f5f9 !important;
+          color: var(--inw-muted) !important;
+          cursor: not-allowed;
+        }
 
         .inward-grid {
           display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -667,6 +743,26 @@ export default function InwardEntry() {
         .inward-icon-action--save { background: #d1fae5; color: var(--inw-success); }
         .inward-icon-action--save:hover { background: #a7f3d0; }
 
+        /* 🆕 Bale No in summary sidebar */
+        .inward-bale-summary {
+          background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+          border: 1px solid #bfdbfe;
+          border-radius: 10px;
+          padding: 12px 16px;
+          margin-bottom: 14px;
+          text-align: center;
+        }
+        .inward-bale-summary__label {
+          font-size: 11px; color: var(--inw-muted);
+          text-transform: uppercase; letter-spacing: 0.5px;
+          margin-bottom: 4px;
+        }
+        .inward-bale-summary__value {
+          font-size: 22px; font-weight: 700;
+          color: var(--inw-primary);
+          letter-spacing: 1px;
+        }
+
         .inward-summary-grid {
           display: grid; grid-template-columns: repeat(2, 1fr);
           gap: 12px; margin-bottom: 12px;
@@ -697,6 +793,7 @@ export default function InwardEntry() {
         @media (max-width: 900px) {
           .inward-grid { grid-template-columns: 1fr; }
           .inward-summary-grid { grid-template-columns: repeat(2, 1fr); }
+          .inward-bale-input { flex: 1 1 100%; }
         }
         @media (max-width: 640px) {
           .inward-page__title { font-size: 20px; }
@@ -743,7 +840,7 @@ function Select({ value, onChange, options }) {
 }
 
 /* For master data objects with _id + name */
-function MasterSelect({ value, onChange, options = [] ,labelKey = "name"}) {
+function MasterSelect({ value, onChange, options = [], labelKey = "name" }) {
   return (
     <div className="inward-select-wrap">
       <select className="inward-select" value={value || ""} onChange={(e) => onChange(e.target.value)}>

@@ -7,27 +7,70 @@ const authMiddleware = require("../middleware/authMiddleware");
 router.use(authMiddleware);
 
 /* ──────────────────────────────────────────────
-   HELPER: Inventory adjust karna
-   direction: -1 = Sale ho raha hai (stock kam karo)
-   direction: +1 = Sale cancel/delete (stock wapas badhao)
+   HELPER 1: Bale-based stock validation
+   - Check each item has baleNo
+   - Check bale exists in inventory
+   - Check availablePcs >= requested pcs
+   ────────────────────────────────────────────── */
+async function validateBaleStock(items) {
+  for (const it of items) {
+    if (!it.baleNo) {
+      return { ok: false, message: "Bale No required for each item" };
+    }
+
+    const baleNo = it.baleNo.toUpperCase().trim();
+    const inv = await Inventory.findOne({ baleNo }).populate("fabric", "name");
+
+    if (!inv) {
+      return { ok: false, message: `Bale "${baleNo}" not found in inventory` };
+    }
+
+    if (inv.availablePcs < it.pcs) {
+      return {
+        ok: false,
+        message: `Bale "${baleNo}" (${inv.fabric?.name || ""}): only ${inv.availablePcs} PCS available, you requested ${it.pcs}`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/* ──────────────────────────────────────────────
+   HELPER 2: Inventory adjust karna (bale-wise)
+   direction: -1 = Sale ho raha hai (availablePcs ghatao)
+   direction: +1 = Sale cancel/delete (availablePcs wapas badhao)
    ────────────────────────────────────────────── */
 async function adjustInventory(items, direction) {
   for (const it of items) {
-    await Inventory.findOneAndUpdate(
-      {
-        fabric: it.fabric,
-        fabricQuality: it.fabricQuality || null,
-        color: it.color || null,
-        location: it.location || null,
-      },
-      {
-        $inc: {
-          totalPcs:   direction * it.pcs,
-          totalMeter: direction * it.totalMeter,
-        },
-      }
-    );
+    if (!it.baleNo) continue;
+
+    const baleNo = it.baleNo.toUpperCase().trim();
+    const inv = await Inventory.findOne({ baleNo });
+    if (!inv) continue;
+
+    // availablePcs aur availableMeter modify
+    inv.availablePcs   = Math.max(inv.availablePcs   + direction * (it.pcs || 0),        0);
+    inv.availableMeter = Math.max(inv.availableMeter + direction * (it.totalMeter || 0), 0);
+
+    // Safety: agar +1 (restore) ke baad available > total ho jaaye to clamp
+    if (inv.availablePcs > inv.totalPcs)     inv.availablePcs   = inv.totalPcs;
+    if (inv.availableMeter > inv.totalMeter) inv.availableMeter = inv.totalMeter;
+
+    await inv.save();  // pre-save chalega → totalValue recompute
   }
+}
+
+/* ──────────────────────────────────────────────
+   HELPER 3: Bale lookups ko inventoryRef se link karna
+   (audit/traceability ke liye)
+   ────────────────────────────────────────────── */
+async function attachInventoryRefs(items) {
+  for (const it of items) {
+    if (!it.baleNo || it.inventoryRef) continue;
+    const inv = await Inventory.findOne({ baleNo: it.baleNo.toUpperCase().trim() });
+    if (inv) it.inventoryRef = inv._id;
+  }
+  return items;
 }
 
 /* ──────────────────────────────────────────────
@@ -40,39 +83,30 @@ router.post("/add", async (req, res) => {
       return res.status(400).json({ message: "Kam se kam ek item add karo" });
     }
 
-    // 1. Stock check pehle — sab items ke liye
-    for (const it of items) {
-      const inv = await Inventory.findOne({
-        fabric: it.fabric,
-        fabricQuality: it.fabricQuality || null,
-        color: it.color || null,
-        location: it.location || null,
-      }).populate("fabric", "name");
-
-      if (!inv) {
-        return res.status(400).json({
-          message: `Stock not found for fabric (combo not in inventory)`,
-        });
-      }
-      if (inv.totalPcs < it.pcs) {
-        return res.status(400).json({
-          message: `Insufficient stock for ${inv.fabric?.name || "item"}. Available: ${inv.totalPcs} PCS, Requested: ${it.pcs} PCS`,
-        });
-      }
+    // 1. Bale-based stock validation
+    const check = await validateBaleStock(items);
+    if (!check.ok) {
+      return res.status(400).json({ message: check.message });
     }
 
-    // 2. Sale create karo — pre-save hook automatically derived totals fill karega
-    const sale = await Sales.create(req.body);
+    // 2. inventoryRef attach karo
+    req.body.items = await attachInventoryRefs(items);
 
-    // 3. Inventory decrement
+    // 3. Sale create karo (pre-save derived totals auto fill karega)
+    const sale = await Sales.create(req.body);
+    console.log(`✅ Sale created: ${sale.invoiceNo} | ${sale.items.length} items`);
+
+    // 4. Inventory decrement (per-bale)
     await adjustInventory(sale.items, -1);
+    console.log("✅ Inventory updated (bales decremented)");
 
     res.status(201).json({
       message: "Sale created successfully, Inventory updated",
       data: sale,
     });
   } catch (err) {
-    // Duplicate invoiceNo error handling
+    console.error("🔴 Sale create error:", err.message);
+
     if (err.code === 11000) {
       return res.status(400).json({ message: "Invoice No already exists" });
     }
@@ -86,9 +120,11 @@ router.post("/add", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const filter = {};
-    if (req.query.customer) filter.customer = req.query.customer;
-    if (req.query.status) filter.status = req.query.status;
+    if (req.query.customer)      filter.customer = req.query.customer;
+    if (req.query.status)        filter.status = req.query.status;
     if (req.query.paymentStatus) filter.paymentStatus = req.query.paymentStatus;
+    if (req.query.baleNo)        filter["items.baleNo"] = req.query.baleNo.toUpperCase();
+
     if (req.query.fromDate || req.query.toDate) {
       filter.saleDate = {};
       if (req.query.fromDate) filter.saleDate.$gte = new Date(req.query.fromDate);
@@ -154,7 +190,7 @@ router.get("/stats", async (req, res) => {
 });
 
 /* ──────────────────────────────────────────────
-   4. GET SINGLE SALE — full populated for edit/view
+   4. GET SINGLE SALE — full populated
    ────────────────────────────────────────────── */
 router.get("/:id", async (req, res) => {
   try {
@@ -167,8 +203,10 @@ router.get("/:id", async (req, res) => {
       .populate("paymentMode", "name")
       .populate("items.fabric", "name")
       .populate("items.fabricQuality", "name")
+      .populate("items.design", "name")
       .populate("items.color", "name")
-      .populate("items.location", "name");
+      .populate("items.location", "name")
+      .populate("items.inventoryRef", "baleNo availablePcs totalPcs");
 
     if (!data) return res.status(404).json({ message: "Sale not found" });
     res.json(data);
@@ -178,7 +216,7 @@ router.get("/:id", async (req, res) => {
 });
 
 /* ──────────────────────────────────────────────
-   5. UPDATE SALE — reverse old inventory, save new, re-apply
+   5. UPDATE SALE — reverse old, validate new, save, re-apply
    ────────────────────────────────────────────── */
 router.put("/:id", async (req, res) => {
   try {
@@ -188,34 +226,30 @@ router.put("/:id", async (req, res) => {
     // 1. Old items inventory wapas (+1)
     await adjustInventory(old.items, +1);
 
-    // 2. New items ki stock check
+    // 2. New items ka bale-based stock check
     const newItems = req.body.items || [];
-    for (const it of newItems) {
-      const inv = await Inventory.findOne({
-        fabric: it.fabric,
-        fabricQuality: it.fabricQuality || null,
-        color: it.color || null,
-        location: it.location || null,
-      }).populate("fabric", "name");
+    const check = await validateBaleStock(newItems);
 
-      if (!inv || inv.totalPcs < it.pcs) {
-        // Rollback — old inventory wapas decrement
-        await adjustInventory(old.items, -1);
-        return res.status(400).json({
-          message: `Insufficient stock for ${inv?.fabric?.name || "item"}. Available: ${inv?.totalPcs || 0} PCS`,
-        });
-      }
+    if (!check.ok) {
+      // Rollback — old items wapas decrement
+      await adjustInventory(old.items, -1);
+      return res.status(400).json({ message: check.message });
     }
 
-    // 3. Update karo
+    // 3. inventoryRef refresh
+    req.body.items = await attachInventoryRefs(newItems);
+
+    // 4. Update karo
     Object.assign(old, req.body);
     const updated = await old.save();
 
-    // 4. New items inventory decrement
+    // 5. New items inventory decrement
     await adjustInventory(updated.items, -1);
 
+    console.log(`✅ Sale updated: ${updated.invoiceNo}`);
     res.json({ message: "Sale updated", data: updated });
   } catch (err) {
+    console.error("🔴 Sale update error:", err.message);
     res.status(500).json({ message: err.message });
   }
 });
@@ -232,6 +266,7 @@ router.delete("/:id", async (req, res) => {
     await adjustInventory(sale.items, +1);
 
     await sale.deleteOne();
+    console.log(`✅ Sale deleted: ${sale.invoiceNo} | Inventory restored`);
     res.json({ message: "Sale deleted, Inventory restored" });
   } catch (err) {
     res.status(500).json({ message: err.message });

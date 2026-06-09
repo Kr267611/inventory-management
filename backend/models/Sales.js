@@ -3,14 +3,23 @@ const mongoose = require("mongoose");
 
 /* ──────── SUB-SCHEMA: Har bechi gayi item ke liye ──────── */
 const saleItemSchema = new mongoose.Schema({
-  // Inventory combo — har item ka apna fabric+quality+color+location
+  // 🆕 BALE NO — primary lookup key (sale ka physical bale identifier)
+  baleNo: {
+    type: String,
+    required: [true, "Bale No required for each item"],
+    uppercase: true,
+    trim: true,
+    index: true,
+  },
+
+  // Snapshot fields (bale se auto-fill, audit ke liye save karte hain)
   fabric:        { type: mongoose.Schema.Types.ObjectId, ref: "Fabric",        required: true },
   fabricQuality: { type: mongoose.Schema.Types.ObjectId, ref: "FabricQuality" },
   design:        { type: mongoose.Schema.Types.ObjectId, ref: "Design" },
   color:         { type: mongoose.Schema.Types.ObjectId, ref: "Color" },
   location:      { type: mongoose.Schema.Types.ObjectId, ref: "Location" },
 
-  // Optional inventory link (audit/traceability ke liye, required nahi)
+  // Direct inventory link (jab bale lookup hota hai tab fill karte hain)
   inventoryRef:  { type: mongoose.Schema.Types.ObjectId, ref: "Inventory" },
 
   // Quantity / Measurement
@@ -33,7 +42,7 @@ const salesSchema = new mongoose.Schema({
   // 🔗 Links
   customer:    { type: mongoose.Schema.Types.ObjectId, ref: "Customer",    required: true },
   company:     { type: mongoose.Schema.Types.ObjectId, ref: "Company",     required: true },
-  location:    { type: mongoose.Schema.Types.ObjectId, ref: "Location" },     // default location
+  location:    { type: mongoose.Schema.Types.ObjectId, ref: "Location" },
   salesPerson: { type: mongoose.Schema.Types.ObjectId, ref: "SalesPerson" },
   transport:   { type: mongoose.Schema.Types.ObjectId, ref: "Transport" },
 
@@ -61,9 +70,9 @@ const salesSchema = new mongoose.Schema({
   // 💰 Derived totals (pre-save me auto fill)
   totalPcs:      { type: Number, default: 0 },
   totalMeter:    { type: Number, default: 0 },
-  grossAmount:   { type: Number, default: 0 },   // before discount
+  grossAmount:   { type: Number, default: 0 },
   discountTotal: { type: Number, default: 0 },
-  netAmount:     { type: Number, default: 0 },   // gross - discount
+  netAmount:     { type: Number, default: 0 },
 
   // 💵 Payment tracking
   paidAmount:    { type: Number, default: 0 },
@@ -92,6 +101,9 @@ salesSchema.pre("save", function () {
   let gross = 0, disc = 0, pcsCount = 0, meterTotal = 0;
 
   this.items.forEach((it) => {
+    // Normalize baleNo
+    if (it.baleNo) it.baleNo = it.baleNo.toUpperCase().trim();
+
     it.totalMeter = +(it.pcs * it.meterPerPcs).toFixed(2);
     const lineGross = it.totalMeter * it.rate;
     const lineDisc  = it.totalMeter * (it.discount || 0);
@@ -109,15 +121,13 @@ salesSchema.pre("save", function () {
   this.discountTotal = +disc.toFixed(2);
   this.netAmount     = +(gross - disc).toFixed(2);
 
-  // Balance due — only auto-set on first save (paidAmount usually 0 initially)
+  // Balance due
   this.balanceDue = Math.max(this.netAmount - (this.paidAmount || 0), 0);
 
   // Payment status auto
   if (this.paidAmount === 0) this.paymentStatus = "Unpaid";
   else if (this.paidAmount >= this.netAmount) this.paymentStatus = "Paid";
   else this.paymentStatus = "Partial";
-
-    // next();
 });
 
 module.exports = mongoose.model("Sales", salesSchema);

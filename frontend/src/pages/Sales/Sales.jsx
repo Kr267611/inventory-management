@@ -5,59 +5,21 @@ import { inventoryApi } from "../../Api/inventoryApi";
 import { fetchAllMasters } from "../../Api/masterApi";
 
 /* ================================================================
-   ICONS (same as before)
+   ICONS
    ================================================================ */
 const Icon = {
-  ArrowLeft: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
-    </svg>
-  ),
-  Refresh: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-    </svg>
-  ),
-  Save: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-      <polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
-    </svg>
-  ),
-  Plus: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  ),
-  Edit: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
-  ),
-  Trash: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    </svg>
-  ),
-  Check: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  ),
-  Calendar: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  ),
-  Info: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-    </svg>
-  ),
+  ArrowLeft: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>,
+  Refresh: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>,
+  Save: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>,
+  Plus: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
+  Edit: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>,
+  Trash: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>,
+  Check: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>,
+  Calendar: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
+  Info: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>,
+  Tag: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
+  Spinner: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sales-spinner"><line x1="12" y1="2" x2="12" y2="6" /><line x1="12" y1="18" x2="12" y2="22" /><line x1="4.93" y1="4.93" x2="7.76" y2="7.76" /><line x1="16.24" y1="16.24" x2="19.07" y2="19.07" /><line x1="2" y1="12" x2="6" y2="12" /><line x1="18" y1="12" x2="22" y2="12" /></svg>,
+  X: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
 };
 
 const PAYMENT_TYPES = ["Credit", "Cash", "Advance"];
@@ -81,9 +43,11 @@ const EMPTY_FORM = {
 };
 
 const EMPTY_ITEM = {
+  baleNo: "",                  // 🆕 primary lookup
   fabric: "",
   fabricQuality: "",
   color: "",
+  location: "",
   pcs: "",
   meterPerPcs: "",
   rate: "",
@@ -108,7 +72,10 @@ export default function Sales() {
     paymentModes: [],
   });
 
-  const [availablePcs, setAvailablePcs] = useState(0);
+  // 🆕 Bale lookup state
+  const [baleData, setBaleData] = useState(null);   // matched inventory record
+  const [baleLookup, setBaleLookup] = useState({ loading: false, error: "" });
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -121,8 +88,6 @@ export default function Sales() {
       try {
         setLoading(true);
         const m = await fetchAllMasters();
-        console.log("masters:", m);
-        console.log("salespersons:", m.salespersons);
         setMasters({
           customers:    m.customers || [],
           companies:    m.companies || [],
@@ -130,19 +95,17 @@ export default function Sales() {
           fabrics:      m.fabrics || [],
           qualities:    m.qualities || [],
           colors:       m.colors || [],
-          salesPersons: m.salespersons || [],
+          salesPersons: m.salespersons || m.salesPersons || [],
           transports:   m.transports || [],
           paymentModes: m.paymentModes || [],
         });
 
-        // Defaults
         setForm((f) => ({
           ...f,
           company:  f.company  || m.companies?.[0]?._id || "",
           location: f.location || m.locations?.[0]?._id || "",
         }));
 
-        // Load existing sale if /sales/:id route
         if (editId) {
           const sale = await salesApi.getById(editId);
           setForm({
@@ -163,6 +126,7 @@ export default function Sales() {
           setItems(
             (sale.items || []).map((it, idx) => ({
               id: it._id || idx + 1,
+              baleNo: it.baleNo || "",                  // 🆕
               fabric: it.fabric?._id || it.fabric,
               fabricQuality: it.fabricQuality?._id || it.fabricQuality,
               color: it.color?._id || it.color,
@@ -185,27 +149,6 @@ export default function Sales() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId]);
 
-  /* ──────── CHECK STOCK whenever combo changes ──────── */
-  useEffect(() => {
-    (async () => {
-      if (!itemForm.fabric || !form.location) {
-        setAvailablePcs(0);
-        return;
-      }
-      try {
-        const result = await inventoryApi.checkStock({
-          fabric: itemForm.fabric,
-          fabricQuality: itemForm.fabricQuality,
-          color: itemForm.color,
-          location: form.location,
-        });
-        setAvailablePcs(result.totalPcs || 0);
-      } catch {
-        setAvailablePcs(0);
-      }
-    })();
-  }, [itemForm.fabric, itemForm.fabricQuality, itemForm.color, form.location]);
-
   /* ──────── AUTO-FILL customer GST when customer changes ──────── */
   useEffect(() => {
     if (!form.customer) return;
@@ -213,6 +156,53 @@ export default function Sales() {
     if (cust?.gstNo) setForm((f) => ({ ...f, gstNo: cust.gstNo }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.customer]);
+
+  /* ──────── 🆕 BALE LOOKUP — heart of bale-based sales ──────── */
+  const lookupBale = async (baleNoRaw) => {
+    const baleNo = (baleNoRaw || "").toUpperCase().trim();
+    if (!baleNo) {
+      setBaleData(null);
+      setBaleLookup({ loading: false, error: "" });
+      return;
+    }
+
+    try {
+      setBaleLookup({ loading: true, error: "" });
+      const inv = await inventoryApi.lookupByBale(baleNo);
+
+      // Auto-fill all bale-related fields
+      setItemForm((prev) => ({
+        ...prev,
+        baleNo: inv.baleNo,
+        fabric: inv.fabric?._id || "",
+        fabricQuality: inv.fabricQuality?._id || "",
+        color: inv.color?._id || "",
+        location: inv.location?._id || "",
+        meterPerPcs: prev.meterPerPcs || String(inv.avgMeterPerPcs || ""),
+        rate: prev.rate || String(inv.rate || ""),
+      }));
+
+      setBaleData(inv);
+      setBaleLookup({ loading: false, error: "" });
+    } catch (err) {
+      setBaleData(null);
+      setBaleLookup({ loading: false, error: err.message });
+    }
+  };
+
+  /* ──────── Available PCS — from looked-up bale ──────── */
+  const availablePcs = useMemo(() => {
+    if (!baleData) return 0;
+    let avail = baleData.availablePcs || 0;
+    // If editing an item from same bale, add back its pcs
+    if (editingId) {
+      const editingItem = items.find((it) => it.id === editingId);
+      if (editingItem && editingItem.baleNo === baleData.baleNo) {
+        avail += editingItem.pcs || 0;
+      }
+    }
+    return avail;
+  }, [baleData, editingId, items]);
 
   /* ──────── LIVE CALCULATIONS ──────── */
   const itemAmount = useMemo(() => {
@@ -237,18 +227,28 @@ export default function Sales() {
 
   /* ──────── ITEM HANDLERS ──────── */
   const handleAddItem = () => {
+    if (!itemForm.baleNo) return alert("Bale No daalo (e.g., A35)");
+    if (!baleData) return alert("Pehle bale lookup karo — valid bale enter karke Tab/Enter dabao");
+
     const pcs = parseFloat(itemForm.pcs);
     const meterPerPcs = parseFloat(itemForm.meterPerPcs);
     const rate = parseFloat(itemForm.rate);
     const discount = parseFloat(itemForm.discount) || 0;
 
-    if (!itemForm.fabric) return alert("Fabric select karo");
     if (!pcs || pcs < 1) return alert("PCS enter karo");
     if (!meterPerPcs) return alert("Meter (Per PCS) enter karo");
     if (!rate) return alert("Rate enter karo");
 
+    // 🆕 Check duplicate bale (same bale can't be added twice in same sale)
+    const duplicate = items.find((it) =>
+      it.baleNo === itemForm.baleNo && it.id !== editingId
+    );
+    if (duplicate) {
+      return alert(`Bale ${itemForm.baleNo} already added. Edit that row instead.`);
+    }
+
     if (pcs > availablePcs) {
-      return alert(`Sirf ${availablePcs} PCS available hain stock me`);
+      return alert(`Sirf ${availablePcs} PCS available hain bale ${itemForm.baleNo} me`);
     }
 
     const totalMeter = pcs * meterPerPcs;
@@ -256,10 +256,11 @@ export default function Sales() {
 
     const newRow = {
       id: editingId ?? Date.now(),
+      baleNo: itemForm.baleNo,                  // 🆕
       fabric: itemForm.fabric,
       fabricQuality: itemForm.fabricQuality,
       color: itemForm.color,
-      location: form.location,    // har item ka location = main form location
+      location: itemForm.location || form.location,
       pcs,
       meterPerPcs,
       totalMeter,
@@ -274,20 +275,28 @@ export default function Sales() {
     } else {
       setItems([...items, newRow]);
     }
+
+    // Reset item form + bale lookup
     setItemForm(EMPTY_ITEM);
+    setBaleData(null);
+    setBaleLookup({ loading: false, error: "" });
   };
 
   const handleEditItem = (row) => {
     setEditingId(row.id);
     setItemForm({
+      baleNo: row.baleNo || "",
       fabric: row.fabric,
       fabricQuality: row.fabricQuality,
       color: row.color,
+      location: row.location || "",
       pcs: String(row.pcs),
       meterPerPcs: String(row.meterPerPcs),
       rate: String(row.rate),
       discount: String(row.discount),
     });
+    // Re-lookup the bale to get fresh availablePcs
+    if (row.baleNo) lookupBale(row.baleNo);
   };
 
   const handleDeleteItem = (id) => {
@@ -296,13 +305,23 @@ export default function Sales() {
     if (editingId === id) {
       setEditingId(null);
       setItemForm(EMPTY_ITEM);
+      setBaleData(null);
     }
+  };
+
+  const handleClearBale = () => {
+    setItemForm(EMPTY_ITEM);
+    setBaleData(null);
+    setBaleLookup({ loading: false, error: "" });
+    setEditingId(null);
   };
 
   const handleReset = () => {
     if (!window.confirm("Saare items aur form reset ho jaayenge. Sure?")) return;
     setItems([]);
     setItemForm(EMPTY_ITEM);
+    setBaleData(null);
+    setBaleLookup({ loading: false, error: "" });
     setEditingId(null);
     setForm({
       ...EMPTY_FORM,
@@ -317,6 +336,10 @@ export default function Sales() {
     if (!form.customer) return alert("Customer select karo");
     if (!form.company)  return alert("Company select karo");
     if (items.length === 0) return alert("Kam se kam ek item add karo");
+
+    // Verify all items have baleNo
+    const missingBale = items.find((it) => !it.baleNo);
+    if (missingBale) return alert("Saare items me bale no chahiye");
 
     const payload = {
       saleDate: form.saleDate,
@@ -333,6 +356,7 @@ export default function Sales() {
       dueDate: form.dueDate || undefined,
       remarks: form.remarks,
       items: items.map((it) => ({
+        baleNo: it.baleNo,                              // 🆕
         fabric: it.fabric,
         fabricQuality: it.fabricQuality || undefined,
         color: it.color || undefined,
@@ -344,7 +368,6 @@ export default function Sales() {
       })),
     };
 
-    // Clean undefined keys
     Object.keys(payload).forEach((k) => {
       if (payload[k] === undefined || payload[k] === "") delete payload[k];
     });
@@ -356,7 +379,7 @@ export default function Sales() {
         alert("Sale updated! Inventory bhi update ho gaya.");
       } else {
         await salesApi.create(payload);
-        alert("Sale created! Inventory me se stock ghat gaya.");
+        alert("Sale created! Bale-wise stock ghat gaya.");
       }
       navigate("/dashboard/sales");
     } catch (err) {
@@ -366,7 +389,6 @@ export default function Sales() {
     }
   };
 
-  /* ──────── HELPERS for name lookup in table ──────── */
   const nameOf = (list, id) => list.find((x) => x._id === id)?.name || "-";
 
   if (loading) {
@@ -463,43 +485,145 @@ export default function Sales() {
             </div>
           </section>
 
-          {/* ADD ITEMS */}
+          {/* 🆕 ADD ITEMS — BALE-BASED */}
           <section className="sales-card">
             <div className="sales-card__head">
-              <h2 className="sales-card__title">Add Items</h2>
-              <button className="sales-btn sales-btn--primary sales-btn--sm" onClick={handleAddItem}>
+              <h2 className="sales-card__title">Add Items (by Bale No)</h2>
+              <button
+                className="sales-btn sales-btn--primary sales-btn--sm"
+                onClick={handleAddItem}
+                disabled={!baleData}
+              >
                 {editingId ? <Icon.Check /> : <Icon.Plus />}
                 <span>{editingId ? "Update Item" : "Add Item"}</span>
               </button>
             </div>
 
+            {/* 🆕 BALE LOOKUP BAR — top, highlighted */}
+            <div className="sales-bale-bar">
+              <div className="sales-bale-bar__main">
+                <div className="sales-bale-bar__icon"><Icon.Tag /></div>
+                <div className="sales-bale-bar__input-wrap">
+                  <label className="sales-bale-bar__label">
+                    Bale No <span className="sales-field__required">*</span>
+                  </label>
+                  <input
+                    className="sales-input sales-bale-input"
+                    placeholder="A35, A59, 1224..."
+                    value={itemForm.baleNo}
+                    onChange={(e) => setIf("baleNo", e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        lookupBale(itemForm.baleNo);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (itemForm.baleNo && (!baleData || baleData.baleNo !== itemForm.baleNo)) {
+                        lookupBale(itemForm.baleNo);
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* Lookup status */}
+                <div className="sales-bale-bar__status">
+                  {baleLookup.loading && (
+                    <span className="sales-bale-status sales-bale-status--loading">
+                      <Icon.Spinner /> Looking up...
+                    </span>
+                  )}
+                  {!baleLookup.loading && baleData && (
+                    <span className="sales-bale-status sales-bale-status--success">
+                      <Icon.Check /> Found: <strong>{baleData.fabric?.name}</strong> · {baleData.availablePcs} PCS available
+                    </span>
+                  )}
+                  {!baleLookup.loading && baleLookup.error && (
+                    <span className="sales-bale-status sales-bale-status--error">
+                      <Icon.X /> {baleLookup.error}
+                    </span>
+                  )}
+                  {!baleLookup.loading && !baleData && !baleLookup.error && !itemForm.baleNo && (
+                    <span className="sales-bale-status sales-bale-status--hint">
+                      Type bale no and press Enter or Tab to lookup
+                    </span>
+                  )}
+                </div>
+
+                {(baleData || itemForm.baleNo) && (
+                  <button className="sales-bale-clear" onClick={handleClearBale} title="Clear">
+                    <Icon.X />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Auto-filled fields (Row 1 — read-only) */}
             <div className="sales-grid sales-grid--4">
-              <Field label="Fabric / Item" required>
-                <MasterSelect value={itemForm.fabric} onChange={(v) => setIf("fabric", v)} options={masters.fabrics} />
+              <Field label="Fabric / Item">
+                <MasterSelect value={itemForm.fabric} options={masters.fabrics} disabled />
               </Field>
               <Field label="Quality">
-                <MasterSelect value={itemForm.fabricQuality} onChange={(v) => setIf("fabricQuality", v)} options={masters.qualities} />
+                <MasterSelect value={itemForm.fabricQuality} options={masters.qualities} disabled />
               </Field>
               <Field label="Color">
-                <MasterSelect value={itemForm.color} onChange={(v) => setIf("color", v)} options={masters.colors} />
+                <MasterSelect value={itemForm.color} options={masters.colors} disabled />
               </Field>
-              <Field label="PCS (Taka)" required>
-                <input className="sales-input" type="number" min="1" value={itemForm.pcs} onChange={(e) => setIf("pcs", e.target.value)} placeholder="0" />
+              <Field label="Available PCS">
+                <input
+                  className={`sales-input ${availablePcs <= 0 ? "sales-input--zero" : "sales-input--readonly"}`}
+                  readOnly
+                  value={availablePcs}
+                />
               </Field>
             </div>
 
+            {/* User-editable fields (Row 2) */}
             <div className="sales-grid sales-grid--5">
-              <Field label="Meter (Per PCS)" required>
-                <input className="sales-input" type="number" step="0.01" value={itemForm.meterPerPcs} onChange={(e) => setIf("meterPerPcs", e.target.value)} placeholder="0.00" />
+              <Field label="PCS to Sell" required>
+                <input
+                  className="sales-input"
+                  type="number"
+                  min="1"
+                  max={availablePcs}
+                  value={itemForm.pcs}
+                  onChange={(e) => setIf("pcs", e.target.value)}
+                  placeholder="0"
+                  disabled={!baleData}
+                />
               </Field>
-              <Field label="Available PCS">
-                <input className={`sales-input ${availablePcs <= 0 ? "sales-input--zero" : "sales-input--readonly"}`} readOnly value={availablePcs} />
+              <Field label="Meter (Per PCS)" required>
+                <input
+                  className="sales-input"
+                  type="number"
+                  step="0.01"
+                  value={itemForm.meterPerPcs}
+                  onChange={(e) => setIf("meterPerPcs", e.target.value)}
+                  placeholder="0.00"
+                  disabled={!baleData}
+                />
               </Field>
               <Field label="Rate (Per Mtr)" required>
-                <input className="sales-input" type="number" step="0.01" value={itemForm.rate} onChange={(e) => setIf("rate", e.target.value)} placeholder="0.00" />
+                <input
+                  className="sales-input"
+                  type="number"
+                  step="0.01"
+                  value={itemForm.rate}
+                  onChange={(e) => setIf("rate", e.target.value)}
+                  placeholder="0.00"
+                  disabled={!baleData}
+                />
               </Field>
               <Field label="Discount (Per Mtr)">
-                <input className="sales-input" type="number" step="0.01" value={itemForm.discount} onChange={(e) => setIf("discount", e.target.value)} placeholder="0.00" />
+                <input
+                  className="sales-input"
+                  type="number"
+                  step="0.01"
+                  value={itemForm.discount}
+                  onChange={(e) => setIf("discount", e.target.value)}
+                  placeholder="0.00"
+                  disabled={!baleData}
+                />
               </Field>
               <Field label="Amount (INR)">
                 <input className="sales-input sales-input--computed" readOnly value={fmt(itemAmount)} />
@@ -516,25 +640,27 @@ export default function Sales() {
                 <thead>
                   <tr>
                     <th>SR No.</th>
+                    <th>Bale No</th>
                     <th>Fabric / Item</th>
                     <th>Quality</th>
                     <th>Color</th>
-                    <th className="sales-th--right">PCS (Taka)</th>
+                    <th className="sales-th--right">PCS</th>
                     <th className="sales-th--right">Meter (Per PCS)</th>
                     <th className="sales-th--right">Total Meter</th>
-                    <th className="sales-th--right">Rate (Per Mtr)</th>
+                    <th className="sales-th--right">Rate</th>
                     <th className="sales-th--right">Discount</th>
-                    <th className="sales-th--right">Amount (INR)</th>
+                    <th className="sales-th--right">Amount</th>
                     <th className="sales-th--center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.length === 0 ? (
-                    <tr><td colSpan="11" className="sales-td--empty">No items added. Add items from the form above.</td></tr>
+                    <tr><td colSpan="12" className="sales-td--empty">No items added. Lookup bale no above and add.</td></tr>
                   ) : (
                     items.map((it, idx) => (
                       <tr key={it.id} className={`sales-tr ${editingId === it.id ? "sales-tr--editing" : ""}`}>
                         <td>{idx + 1}</td>
+                        <td><span className="sales-bale-chip">{it.baleNo || "-"}</span></td>
                         <td className="sales-td--strong">{nameOf(masters.fabrics, it.fabric)}</td>
                         <td>{nameOf(masters.qualities, it.fabricQuality)}</td>
                         <td>{nameOf(masters.colors, it.color)}</td>
@@ -557,7 +683,7 @@ export default function Sales() {
                 {items.length > 0 && (
                   <tfoot>
                     <tr className="sales-total-row">
-                      <td colSpan="4" className="sales-td--strong sales-td--center">Total</td>
+                      <td colSpan="5" className="sales-td--strong sales-td--center">Total</td>
                       <td className="sales-td--right sales-td--strong">{summary.totalPcs}</td>
                       <td></td>
                       <td className="sales-td--right sales-td--strong">{fmt(summary.totalMeter)}</td>
@@ -579,7 +705,7 @@ export default function Sales() {
           {/* NOTE */}
           <div className="sales-note">
             <Icon.Info />
-            <span><strong>Note:</strong> Sales entry will automatically reduce stock from Inventory. Make sure stock is available before saving.</span>
+            <span><strong>Flow:</strong> Bale no enter karo → Lookup → fabric/quality/color auto-fill → PCS to sell daalo → Add → Save. Inventory automatically bale-wise update hoga.</span>
           </div>
         </div>
 
@@ -707,8 +833,9 @@ export default function Sales() {
           outline: none; border-color: var(--sl-primary);
           box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
         }
+        .sales-input:disabled { background: #f8fafc; color: var(--sl-muted); cursor: not-allowed; }
         .sales-input::placeholder { color: #94a3b8; }
-        .sales-input--readonly { background: #f8fafc; color: var(--sl-muted); cursor: not-allowed; }
+        .sales-input--readonly { background: #f8fafc; color: var(--sl-text); cursor: default; font-weight: 600; }
         .sales-input--zero { background: #fee2e2; color: #b91c1c; cursor: not-allowed; font-weight: 600; }
         .sales-input--computed {
           background: #eff6ff; color: var(--sl-primary);
@@ -722,8 +849,78 @@ export default function Sales() {
           color: var(--sl-muted); pointer-events: none;
         }
 
+        /* 🆕 BALE LOOKUP BAR — hero section */
+        .sales-bale-bar {
+          background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+          border: 1px solid #bfdbfe;
+          border-radius: 10px;
+          padding: 16px;
+          margin-bottom: 18px;
+        }
+        .sales-bale-bar__main {
+          display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        }
+        .sales-bale-bar__icon {
+          width: 44px; height: 44px; flex-shrink: 0;
+          background: var(--sl-primary); color: #fff;
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .sales-bale-bar__icon svg { width: 20px; height: 20px; }
+        .sales-bale-bar__input-wrap {
+          flex: 0 0 240px; display: flex; flex-direction: column; gap: 4px;
+        }
+        .sales-bale-bar__label {
+          font-size: 12px; font-weight: 600; color: var(--sl-label);
+        }
+        .sales-bale-input {
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          padding: 10px 14px !important;
+          border: 2px solid var(--sl-primary) !important;
+          background: #fff !important;
+        }
+        .sales-bale-bar__status {
+          flex: 1; min-width: 200px;
+        }
+        .sales-bale-status {
+          display: inline-flex; align-items: center; gap: 6px;
+          font-size: 13px; padding: 6px 12px; border-radius: 6px;
+        }
+        .sales-bale-status svg { width: 14px; height: 14px; }
+        .sales-bale-status--loading { background: #f1f5f9; color: var(--sl-muted); }
+        .sales-bale-status--success { background: #d1fae5; color: #047857; }
+        .sales-bale-status--error   { background: #fee2e2; color: #b91c1c; }
+        .sales-bale-status--hint    { color: var(--sl-muted); font-style: italic; }
+        .sales-bale-clear {
+          background: #fff; border: 1px solid var(--sl-border);
+          width: 36px; height: 36px; border-radius: 8px;
+          cursor: pointer; color: var(--sl-muted);
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.15s;
+        }
+        .sales-bale-clear:hover { background: #fee2e2; color: var(--sl-danger); border-color: #fecaca; }
+
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .sales-spinner { animation: spin 1s linear infinite; }
+
+        /* Bale chip in table */
+        .sales-bale-chip {
+          display: inline-block;
+          padding: 4px 10px;
+          background: #dbeafe;
+          color: #1e40af;
+          border-radius: 6px;
+          font-family: ui-monospace, SFMono-Regular, monospace;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+        }
+
         .sales-table-wrap { overflow-x: auto; border: 1px solid var(--sl-border); border-radius: 8px; }
-        .sales-table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+        .sales-table { width: 100%; border-collapse: collapse; min-width: 1200px; }
         .sales-table th {
           background: #f8fafc; padding: 11px 14px;
           font-size: 11px; font-weight: 600;
@@ -799,13 +996,12 @@ export default function Sales() {
         @media (max-width: 800px) {
           .sales-grid--3 { grid-template-columns: repeat(2, 1fr); }
           .sales-summary-grid { grid-template-columns: repeat(2, 1fr); }
+          .sales-bale-bar__input-wrap { flex: 1 1 100%; }
         }
         @media (max-width: 600px) {
           .sales-page { padding: 16px; }
           .sales-page__title { font-size: 20px; }
-          .sales-grid--3,
-          .sales-grid--4,
-          .sales-grid--5 { grid-template-columns: 1fr; }
+          .sales-grid--3, .sales-grid--4, .sales-grid--5 { grid-template-columns: 1fr; }
           .sales-summary-grid { grid-template-columns: 1fr 1fr; }
           .sales-page__actions { width: 100%; }
           .sales-page__actions .sales-btn { flex: 1; justify-content: center; }
@@ -828,9 +1024,14 @@ function Field({ label, required, full, children }) {
   );
 }
 
-function MasterSelect({ value, onChange, options = [] }) {
+function MasterSelect({ value, onChange, options = [], disabled = false }) {
   return (
-    <select className="sales-input" value={value || ""} onChange={(e) => onChange(e.target.value)}>
+    <select
+      className="sales-input"
+      value={value || ""}
+      onChange={(e) => onChange?.(e.target.value)}
+      disabled={disabled}
+    >
       <option value="">Select...</option>
       {options.map((opt) => (
         <option key={opt._id} value={opt._id}>{opt.name}</option>

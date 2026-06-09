@@ -127,6 +127,7 @@ const DATE_PRESETS = [
 const EMPTY_FILTERS = {
   fromDate: "", toDate: "",
   supplier: "", fabric: "", company: "",
+  baleNo:"",    // bale No
   search: "",
 };
 
@@ -192,11 +193,16 @@ export default function InwardReport() {
     if (appliedFilters.company) {
       list = list.filter((i) => (i.company?._id || i.company) === appliedFilters.company);
     }
+    if(appliedFilters.baleNo){
+      const bale=appliedFilters.baleNo.toUpperCase().trim();
+      list = list.filter((i) => (i.baleNo || "").toUpperCase().includes(bale));
+    }
     if (appliedFilters.search) {
       const q = appliedFilters.search.toLowerCase();
       list = list.filter((i) =>
         (i.voucherNo || "").toLowerCase().includes(q) ||
         (i.invoiceNo || "").toLowerCase().includes(q) ||
+        (i.baleNo || "").toLowerCase().includes(q) ||               // bale No search
         (i.supplier?.name || "").toLowerCase().includes(q) ||
         (i.fabric?.name || "").toLowerCase().includes(q)
       );
@@ -246,7 +252,7 @@ export default function InwardReport() {
     if (filteredInwards.length === 0) return alert("No data to export");
 
     const headers = [
-      "SR No.", "Date", "Voucher No", "Supplier", "Invoice No",
+      "SR No.", "Date", "Voucher No", "Bale No", "Supplier", "Invoice No",
       "Fabric", "Quality", "Total PCS", "Total Meter", "Rate (Per Mtr)", "Total Amount (INR)",
     ];
 
@@ -254,6 +260,7 @@ export default function InwardReport() {
       idx + 1,
       formatDate(i.entryDate || i.createdAt),
       i.voucherNo || "",
+      i.baleNo || "",                                  // 🆕
       i.supplier?.name || "",
       i.invoiceNo || "",
       i.fabric?.name || "",
@@ -266,7 +273,7 @@ export default function InwardReport() {
 
     // Totals row
     rows.push([
-      "", "", "", "", "", "", "Total:",
+      "", "", "", "", "", "", "", "Total:",            // 🆕 1 extra blank
       summary.totalPcs, summary.totalMeter.toFixed(2), "", summary.totalAmount.toFixed(2),
     ]);
 
@@ -379,7 +386,17 @@ export default function InwardReport() {
               {masters.companies.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
             </select>
           </Field>
-          <Field label="Search" full>
+          {/* 🆕 BALE NO FILTER */}
+          <Field label="Bale No">
+            <input
+              className="irpt-input irpt-bale-input"
+              placeholder="e.g. A35, 1224"
+              value={filters.baleNo}
+              onChange={(e) => setF("baleNo", e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+            />
+          </Field>
+          <Field label="Search">
             <div className="irpt-input-wrap">
               <span className="irpt-input__icon irpt-input__icon--left"><Icon.Search /></span>
               <input
@@ -441,6 +458,7 @@ export default function InwardReport() {
                   <th>SR No.</th>
                   <th>Date</th>
                   <th>Voucher No</th>
+                  <th>Bale No</th>
                   <th>Supplier</th>
                   <th>Invoice No</th>
                   <th>Fabric / Item</th>
@@ -454,9 +472,9 @@ export default function InwardReport() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="12" className="irpt-td--empty">Loading...</td></tr>
+                  <tr><td colSpan="13" className="irpt-td--empty">Loading...</td></tr>
                 ) : filteredInwards.length === 0 ? (
-                  <tr><td colSpan="12" className="irpt-td--empty">No inward entries in this period</td></tr>
+                  <tr><td colSpan="13" className="irpt-td--empty">No inward entries in this period</td></tr>
                 ) : (
                   filteredInwards.map((i, idx) => {
                     const amount = i.baseCurrencyTotal || ((i.totalMeter || 0) * (i.rate || 0));
@@ -465,6 +483,7 @@ export default function InwardReport() {
                         <td>{idx + 1}</td>
                         <td>{formatDate(i.entryDate || i.createdAt)}</td>
                         <td className="irpt-mono">{i.voucherNo || "-"}</td>
+                        <td>{i.baleNo ? <span className="irpt-bale-chip">{i.baleNo}</span> : "-"}</td>{/* 🆕 */}
                         <td>{i.supplier?.name || "-"}</td>
                         <td className="irpt-mono">{i.invoiceNo || "-"}</td>
                         <td className="irpt-td--strong">{i.fabric?.name || "-"}</td>
@@ -490,7 +509,7 @@ export default function InwardReport() {
               {filteredInwards.length > 0 && (
                 <tfoot>
                   <tr className="irpt-total-row">
-                    <td colSpan="7" className="irpt-td--strong">TOTAL</td>
+                    <td colSpan="8" className="irpt-td--strong">TOTAL</td>
                     <td className="irpt-td--right irpt-td--strong">{fmtInt(summary.totalPcs)}</td>
                     <td className="irpt-td--right irpt-td--strong">{fmtNum(summary.totalMeter)}</td>
                     <td></td>
@@ -699,6 +718,24 @@ export default function InwardReport() {
         .irpt-td--strong { font-weight: 600; }
         .irpt-td--empty { text-align: center; color: var(--irpt-muted); padding: 40px !important; }
         .irpt-mono { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: var(--irpt-primary); }
+
+        /* 🆕 Bale No chip & input */
+        .irpt-bale-chip {
+          display: inline-block;
+          padding: 3px 9px;
+          background: #dbeafe;
+          color: #1e40af;
+          border-radius: 6px;
+          font-family: ui-monospace, SFMono-Regular, monospace;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+        }
+        .irpt-bale-input {
+          text-transform: uppercase;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+        }
 
         .irpt-total-row td {
           background: #f8fafc;
