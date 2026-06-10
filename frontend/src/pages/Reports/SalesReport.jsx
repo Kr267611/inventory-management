@@ -134,12 +134,22 @@ export default function SalesReport() {
     if (appliedFilters.paymentStatus) {
       list = list.filter((s) => s.paymentStatus === appliedFilters.paymentStatus);
     }
-    // 🆕 Bale No filter — check ANY item me match ho
+    
+  // 🆕 Multi-bale comma filter — check ANY item me ANY bale match ho
     if (appliedFilters.baleNo) {
-      const bale = appliedFilters.baleNo.toUpperCase().trim();
-      list = list.filter((s) =>
-        (s.items || []).some((it) => (it.baleNo || "").toUpperCase().includes(bale))
-      );
+      const baleList = appliedFilters.baleNo
+        .split(",")
+        .map((b) => b.trim().toUpperCase())
+        .filter(Boolean);
+
+      if (baleList.length > 0) {
+        list = list.filter((s) =>
+          (s.items || []).some((it) => {
+            const bn = (it.baleNo || "").toUpperCase();
+            return baleList.some((b) => bn.includes(b));      // ANY match
+          })
+        );
+      }
     }
     if (appliedFilters.search) {
       const q = appliedFilters.search.toLowerCase();

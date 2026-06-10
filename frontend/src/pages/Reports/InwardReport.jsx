@@ -193,9 +193,19 @@ export default function InwardReport() {
     if (appliedFilters.company) {
       list = list.filter((i) => (i.company?._id || i.company) === appliedFilters.company);
     }
-    if(appliedFilters.baleNo){
-      const bale=appliedFilters.baleNo.toUpperCase().trim();
-      list = list.filter((i) => (i.baleNo || "").toUpperCase().includes(bale));
+   // 🆕 Multi-bale comma filter
+    if (appliedFilters.baleNo) {
+      const baleList = appliedFilters.baleNo
+        .split(",")
+        .map((b) => b.trim().toUpperCase())
+        .filter(Boolean);
+
+      if (baleList.length > 0) {
+        list = list.filter((i) => {
+          const bn = (i.baleNo || "").toUpperCase();
+          return baleList.some((b) => bn.includes(b));    // ANY match
+        });
+      }
     }
     if (appliedFilters.search) {
       const q = appliedFilters.search.toLowerCase();

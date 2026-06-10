@@ -138,6 +138,11 @@ router.get("/", async (req, res) => {
       .populate("salesPerson", "name")
       .populate("transport", "name")
       .populate("paymentMode", "name")
+      // 🆕 Items refs populate karo — Party-Wise Report ke ledger ke liye
+      .populate("items.fabric", "name")
+      .populate("items.fabricQuality", "name")
+      .populate("items.color", "name")
+      .populate("items.design", "designNo name")
       .sort({ createdAt: -1 });
 
     res.json(data);
@@ -203,7 +208,7 @@ router.get("/:id", async (req, res) => {
       .populate("paymentMode", "name")
       .populate("items.fabric", "name")
       .populate("items.fabricQuality", "name")
-      .populate("items.design", "name")
+      .populate("items.design", "designNo name") 
       .populate("items.color", "name")
       .populate("items.location", "name")
       .populate("items.inventoryRef", "baleNo availablePcs totalPcs");

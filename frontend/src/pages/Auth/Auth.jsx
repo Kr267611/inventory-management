@@ -5,6 +5,7 @@ import {api} from "../../Api/api";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
@@ -16,41 +17,52 @@ const Auth = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   }
 
-  const handleSubmit = async (e) => {
-  e.preventDefault();
+const handleSubmit = async (e) => {
+    e.preventDefault();
 
-  try {
-    if (isLogin) {
-  const data = await api.post("/auth/login", {
-    email: formData.email,
-    password: formData.password,
-  });
+    // 🆕 Already submitting? Block double-click
+    if (loading) return;
 
-  localStorage.setItem("token", data.token);
+    // 🆕 Basic validation
+    if (!formData.email || !formData.password) {
+      return alert("Email aur password dono daalo");
+    }
+    if (!isLogin && !formData.name) {
+      return alert("Naam daalo");
+    }
 
-  alert("Login Successful");
-  navigate("/dashboard");
-}
- else{
+    try {
+      setLoading(true);                                  // 🆕 disable button
 
-  await api.post("/auth/register", formData);
+      if (isLogin) {
+        const data = await api.post("/auth/login", {
+          email: formData.email,
+          password: formData.password,
+        });
 
-alert("Registered Successfully!");
+        localStorage.setItem("token", data.token);
+        alert("Login Successful");
+        navigate("/dashboard");
+      } else {
+        await api.post("/auth/register", formData);
 
-setFormData({
-  name: "",
-  email: "",
-  password: ""
-});
+        alert("Registered Successfully!");
 
-setIsLogin(true);
- }
+        setFormData({
+          name: "",
+          email: "",
+          password: ""
+        });
 
-  } catch (error) {
-    console.log(error);
-    alert("Something went wrong");
-  }
-};
+        setIsLogin(true);
+      }
+    } catch (error) {
+      console.log(error);
+      alert(error.message || "Something went wrong");
+    } finally {
+      setLoading(false);                                 // 🆕 re-enable button (success ya error dono case me)
+    }
+  };
 
   return (
     <div className="auth-container">
@@ -78,11 +90,12 @@ setIsLogin(true);
 
         <div className="auth-card">
 
-          {/* 🔥 Tabs */}
+         {/* 🔥 Tabs */}
           <div className="tabs">
             <button
               className={isLogin ? "active" : ""}
               onClick={() => setIsLogin(true)}
+              disabled={loading}
             >
               Login
             </button>
@@ -90,11 +103,11 @@ setIsLogin(true);
             <button
               className={!isLogin ? "active" : ""}
               onClick={() => setIsLogin(false)}
+              disabled={loading}
             >
               Register
             </button>
           </div>
-
           {/* 🔥 Heading */}
           <h2>{isLogin ? "Welcome Back!" : "Create Account"}</h2>
           <p className="subtitle">
@@ -152,8 +165,12 @@ setIsLogin(true);
             )}
 
             {/* 🔥 Button */}
-            <button type="submit" className="main-btn">
-              {isLogin ? "Sign In" : "Sign Up"}
+         {/* 🔥 Button */}
+            <button type="submit" className="main-btn" disabled={loading}>
+              {loading
+                ? (isLogin ? "Signing In..." : "Creating Account...")
+                : (isLogin ? "Sign In" : "Sign Up")
+              }
             </button>
 
             {/* 🔥 Divider */}

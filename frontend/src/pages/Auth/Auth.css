@@ -192,6 +192,17 @@
   background: white;
   cursor: pointer;
 }
+/* 🆕 Disabled button states */
+.main-btn:disabled,
+.tabs button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.main-btn:disabled {
+  background: #94a3b8;        /* grey color */
+}
 
 /* 🔥 MOBILE RESPONSIVE */
 @media (max-width: 768px) {

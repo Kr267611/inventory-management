@@ -225,13 +225,23 @@ export default function PartyWiseReport() {
       list = list.filter((l) => l.customer._id === appliedFilters.customer);
     }
     // 🆕 Bale No filter — find customers who bought specific bale
+   // 🆕 Bale No filter — supports multiple bales (comma separated)
     if (appliedFilters.baleNo) {
-      const bale = appliedFilters.baleNo.toUpperCase().trim();
-      list = list.filter((l) =>
-        l.sales.some((s) =>
-          (s.items || []).some((it) => (it.baleNo || "").toUpperCase().includes(bale))
-        )
-      );
+      const baleList = appliedFilters.baleNo
+        .split(",")
+        .map((b) => b.trim().toUpperCase())
+        .filter(Boolean);
+
+      if (baleList.length > 0) {
+        list = list.filter((l) =>
+          l.sales.some((s) =>
+            (s.items || []).some((it) => {
+              const bn = (it.baleNo || "").toUpperCase();
+              return baleList.some((b) => bn.includes(b));     // ANY match
+            })
+          )
+        );
+      }
     }
     if (appliedFilters.search) {
       const q = appliedFilters.search.toLowerCase();
@@ -424,7 +434,7 @@ export default function PartyWiseReport() {
           <Field label="Bale No">
             <input
               className="pwrpt-input pwrpt-bale-input"
-              placeholder="e.g. A35"
+               placeholder="A35, A59, 1224 (comma separated)"
               value={filters.baleNo}
               onChange={(e) => setF("baleNo", e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
@@ -612,60 +622,107 @@ export default function PartyWiseReport() {
             <div className="pwrpt-modal__body">
               {modalTab === "sales" && (
                 <div className="pwrpt-table-wrap">
-                  <table className="pwrpt-table pwrpt-table--modal">
+                  <table className="pwrpt-table pwrpt-table--modal pwrpt-table--ledger">
                     <thead>
                       <tr>
+                        <th>SR</th>
                         <th>Date</th>
-                        <th>Invoice</th>
-                        <th>Bales</th>{/* 🆕 */}
-                        <th className="pwrpt-th--right">PCS</th>
-                        <th className="pwrpt-th--right">Net Amount</th>
-                        <th className="pwrpt-th--right">Paid</th>
-                        <th className="pwrpt-th--right">Balance</th>
-                        <th className="pwrpt-th--center">Status</th>
+                        <th>Invoice No</th>
+                        <th>Bale No</th>
+                        <th>Fabric Name</th>
+                        <th>Quality</th>
+                        <th>Color</th>
+                        <th>Design</th>
+                        <th className="pwrpt-th--right">Qty</th>
+                        <th className="pwrpt-th--right">Rate</th>
+                        <th className="pwrpt-th--right">Amount</th>
+                        <th>Receive Date</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {detailModal.sales.length === 0 ? (
-                        <tr><td colSpan="8" className="pwrpt-td--empty">No sales</td></tr>
-                      ) : (
-                        detailModal.sales.map((s) => (
-                          <tr key={s._id}>
-                            <td>{formatDate(s.saleDate || s.createdAt)}</td>
-                            <td className="pwrpt-mono">{s.invoiceNo}</td>
-                            {/* 🆕 Bales cell */}
-                            <td>
-                              {(() => {
-                                const bales = [...new Set((s.items || []).map((it) => it.baleNo).filter(Boolean))];
-                                if (bales.length === 0) return <span className="pwrpt-muted">-</span>;
-                                return (
-                                  <div className="pwrpt-bales-list">
-                                    {bales.slice(0, 3).map((b) => (
-                                      <span key={b} className="pwrpt-bale-chip">{b}</span>
-                                    ))}
-                                    {bales.length > 3 && (
-                                      <span className="pwrpt-bale-more" title={bales.slice(3).join(", ")}>
-                                        +{bales.length - 3}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                            <td className="pwrpt-td--right">{fmtInt(s.totalPcs)}</td>
-                            <td className="pwrpt-td--right pwrpt-td--strong">{fmtNum(s.netAmount)}</td>
-                            <td className="pwrpt-td--right pwrpt-paid">{fmtNum(s.paidAmount)}</td>
-                            <td className={`pwrpt-td--right ${(s.balanceDue || 0) > 0 ? "pwrpt-balance-due" : "pwrpt-balance-zero"}`}>
-                              {fmtNum(s.balanceDue)}
-                            </td>
-                            <td className="pwrpt-td--center">
-                              <span className={`pwrpt-mini-badge pwrpt-mini-badge--${(s.paymentStatus || "unpaid").toLowerCase()}`}>
-                                {s.paymentStatus || "Unpaid"}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      )}
+                      {(() => {
+                        // 🆕 Flatten sales into item-level rows
+                        const itemLedger = [];
+                        detailModal.sales.forEach((sale) => {
+                          // Find latest payment for this sale (for receive date)
+                          const salePayments = detailModal.payments.filter((p) =>
+                            (p.sale?._id || p.sale) === sale._id
+                          );
+                          const lastPayment = salePayments.length > 0
+                            ? salePayments.reduce((latest, p) =>
+                                new Date(p.paymentDate || p.createdAt) > new Date(latest.paymentDate || latest.createdAt) ? p : latest
+                              )
+                            : null;
+
+                          (sale.items || []).forEach((item, idx) => {
+                            itemLedger.push({
+                              key: `${sale._id}-${idx}`,
+                              date: sale.saleDate || sale.createdAt,
+                              invoiceNo: sale.invoiceNo,
+                              isFirstOfInvoice: idx === 0,
+                              baleNo: item.baleNo || "-",
+                              fabric: item.fabric?.name || "-",
+                              quality: item.fabricQuality?.name || "-",
+                              color: item.color?.name || "-",
+                              design: item.design?.designNo || "-",
+                              pcs: item.pcs,
+                              rate: item.rate,
+                              amount: item.amount,
+                              receiveDate: lastPayment ? (lastPayment.paymentDate || lastPayment.createdAt) : null,
+                              fullyPaid: (sale.balanceDue || 0) === 0,
+                            });
+                          });
+                        });
+
+                        if (itemLedger.length === 0) {
+                          return <tr><td colSpan="12" className="pwrpt-td--empty">No sales</td></tr>;
+                        }
+
+                        // Compute totals
+                        const totalQty    = itemLedger.reduce((s, r) => s + (r.pcs || 0), 0);
+                        const totalAmount = itemLedger.reduce((s, r) => s + (r.amount || 0), 0);
+
+                        return (
+                          <>
+                            {itemLedger.map((row, idx) => (
+                              <tr key={row.key} className={row.isFirstOfInvoice ? "pwrpt-ledger-row--first" : ""}>
+                                <td>{idx + 1}</td>
+                                <td>{formatDate(row.date)}</td>
+                                <td className="pwrpt-mono">{row.invoiceNo}</td>
+                                <td>
+                                  {row.baleNo !== "-"
+                                    ? <span className="pwrpt-bale-chip">{row.baleNo}</span>
+                                    : <span className="pwrpt-muted">-</span>}
+                                </td>
+                                <td className="pwrpt-td--strong">{row.fabric}</td>
+                                <td>{row.quality}</td>
+                                <td>{row.color}</td>
+                                <td>{row.design}</td>
+                                <td className="pwrpt-td--right">{fmtInt(row.pcs)}</td>
+                                <td className="pwrpt-td--right">{fmtNum(row.rate)}</td>
+                                <td className="pwrpt-td--right pwrpt-td--strong">{fmtNum(row.amount)}</td>
+                                <td>
+                                  {row.isFirstOfInvoice
+                                    ? (row.receiveDate
+                                        ? <span className={row.fullyPaid ? "pwrpt-paid" : "pwrpt-balance-due"}>
+                                            {formatDate(row.receiveDate)}
+                                          </span>
+                                        : <span className="pwrpt-muted">Pending</span>)
+                                    : ""
+                                  }
+                                </td>
+                              </tr>
+                            ))}
+                            <tr className="pwrpt-total-row">
+                              <td colSpan="8" className="pwrpt-td--strong">TOTAL</td>
+                              <td className="pwrpt-td--right pwrpt-td--strong">{fmtInt(totalQty)}</td>
+                              <td></td>
+                              <td className="pwrpt-td--right pwrpt-td--strong">{fmtNum(totalAmount)}</td>
+                              <td></td>
+                            </tr>
+                          </>
+                        );
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -938,6 +995,17 @@ export default function PartyWiseReport() {
           text-transform: uppercase;
           font-weight: 600;
           letter-spacing: 0.5px;
+        }
+
+        /* 🆕 Item-level ledger — invoice group visual separation */
+        .pwrpt-table--ledger { min-width: 1100px; font-size: 12px; }
+        .pwrpt-table--ledger td { padding: 10px 10px; }
+        .pwrpt-table--ledger th { padding: 10px 10px; }
+        .pwrpt-ledger-row--first td {
+          border-top: 2px solid #e0e7ff;
+        }
+        .pwrpt-ledger-row--first td:first-child {
+          border-top-color: var(--pwrpt-primary);
         }
 
         .pwrpt-total-row td {

@@ -99,11 +99,19 @@ export default function InvReport() {
     if (appliedFilters.fabricQuality) list = list.filter((i) => (i.fabricQuality?._id || i.fabricQuality) === appliedFilters.fabricQuality);
     if (appliedFilters.color)         list = list.filter((i) => (i.color?._id || i.color) === appliedFilters.color);
     if (appliedFilters.location)      list = list.filter((i) => (i.location?._id || i.location) === appliedFilters.location);
-
-    // 🆕 Bale No filter
+   // 🆕 Multi-bale comma filter
     if (appliedFilters.baleNo) {
-      const bale = appliedFilters.baleNo.toUpperCase().trim();
-      list = list.filter((i) => (i.baleNo || "").toUpperCase().includes(bale));
+      const baleList = appliedFilters.baleNo
+        .split(",")
+        .map((b) => b.trim().toUpperCase())
+        .filter(Boolean);
+
+      if (baleList.length > 0) {
+        list = list.filter((i) => {
+          const bn = (i.baleNo || "").toUpperCase();
+          return baleList.some((b) => bn.includes(b));    // ANY match
+        });
+      }
     }
 
     if (appliedFilters.search) {
