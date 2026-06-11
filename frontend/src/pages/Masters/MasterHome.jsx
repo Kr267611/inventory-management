@@ -1,4 +1,5 @@
-import React from "react";
+import { fetchAllMasters } from "../../Api/masterApi";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 /* ------------------------------------------------------------------
@@ -118,25 +119,25 @@ const Icon = {
    DATA — Easy to edit, add/remove masters
    ------------------------------------------------------------------ */
 const MASTERS = [
-  { key: "fabric",    title: "Fabric",    subtitle: "Manage all fabric items",   count: 1, countLabel: "Total Fabrics",      icon: <Icon.Fabric />,       color: "blue"   },
-  { key: "quality",   title: "Quality",   subtitle: "Manage fabric qualities",   count: 24,  countLabel: "Total Qualities",    icon: <Icon.Award />,        color: "green"  },
-  { key: "design",    title: "Design",    subtitle: "Manage fabric designs",     count: 96,  countLabel: "Total Designs",      icon: <Icon.PenSquare />,    color: "purple" },
-  { key: "color",     title: "Color",     subtitle: "Manage fabric colors",      count: 48,  countLabel: "Total Colors",       icon: <Icon.Palette />,      color: "pink"   },
-  { key: "supplier",  title: "Supplier",  subtitle: "Manage all suppliers",      count: 56,  countLabel: "Total Suppliers",    icon: <Icon.Truck />,        color: "orange" },
-  { key: "location",  title: "Location",  subtitle: "Manage all locations",      count: 12,  countLabel: "Total Locations",    icon: <Icon.MapPin />,       color: "teal"   },
-  { key: "uom",       title: "UOM",       subtitle: "Manage units of measurement", count: 8, countLabel: "Total UOMs",         icon: <Icon.Scale />,        color: "indigo" },
-  { key: "company",   title: "Company",   subtitle: "Manage company details",    count: 1,   countLabel: "Total Companies",    icon: <Icon.Building />,     color: "violet" },
-  { key: "container", title: "Container", subtitle: "Manage all containers",     count: 18,  countLabel: "Total Containers",   icon: <Icon.Container />,    color: "purple" },
-  { key: "customer",  title: "Customer",  subtitle: "Manage customers",          count: 24,  countLabel: "Total Customers",    icon: <Icon.Users />,        color: "blue"   },
-  { key: "paymentmode",    title: "Payment Mode",    subtitle: "Manage payment modes",            count: 32,  countLabel: "Total Payment Modes",      icon: <Icon.Grid />,         color: "orange" },
-  { key: "salesPerson", title: "Sales Person", subtitle: "Manage sales persons",       count: 15,  countLabel: "Total Sales Persons", icon: <Icon.Users />,        color: "blue"   },
-   { key: "transport", title: "Transport", subtitle: "Manage transporters",       count: 15,  countLabel: "Total Transporters", icon: <Icon.Truck />,        color: "blue"   },
+  { key: "fabric", title: "Fabric", subtitle: "Manage all fabric items", countLabel: "Total Fabrics", icon: <Icon.Fabric />, color: "blue" },
+  { key: "quality", title: "Quality", subtitle: "Manage fabric qualities", countLabel: "Total Qualities", icon: <Icon.Award />, color: "green" },
+  { key: "design", title: "Design", subtitle: "Manage fabric designs", countLabel: "Total Designs", icon: <Icon.PenSquare />, color: "purple" },
+  { key: "color", title: "Color", subtitle: "Manage fabric colors", countLabel: "Total Colors", icon: <Icon.Palette />, color: "pink" },
+  { key: "supplier", title: "Supplier", subtitle: "Manage all suppliers", countLabel: "Total Suppliers", icon: <Icon.Truck />, color: "orange" },
+  { key: "location", title: "Location", subtitle: "Manage all locations", countLabel: "Total Locations", icon: <Icon.MapPin />, color: "teal" },
+  { key: "uom", title: "UOM", subtitle: "Manage units of measurement", countLabel: "Total UOMs", icon: <Icon.Scale />, color: "indigo" },
+  { key: "company", title: "Company", subtitle: "Manage company details", countLabel: "Total Companies", icon: <Icon.Building />, color: "violet" },
+  { key: "container", title: "Container", subtitle: "Manage all containers", countLabel: "Total Containers", icon: <Icon.Container />, color: "purple" },
+  { key: "customer", title: "Customer", subtitle: "Manage customers", countLabel: "Total Customers", icon: <Icon.Users />, color: "blue" },
+  { key: "paymentmode", title: "Payment Mode", subtitle: "Manage payment modes", countLabel: "Total Payment Modes", icon: <Icon.Grid />, color: "orange" },
+  { key: "salesPerson", title: "Sales Person", subtitle: "Manage sales persons", countLabel: "Total Sales Persons", icon: <Icon.Users />, color: "blue" },
+  { key: "transport", title: "Transport", subtitle: "Manage transporters", countLabel: "Total Transporters", icon: <Icon.Truck />, color: "blue" },
 ];
 
 const STATS = [
-  { key: "total",    label: "Total Masters",    value: 495,     hint: "All master records",  icon: <Icon.Users />,       color: "blue"   },
-  { key: "active",   label: "Active Masters",   value: 482,     hint: "Active records",      icon: <Icon.CheckCircle />, color: "green"  },
-  { key: "inactive", label: "Inactive Masters", value: 13,      hint: "Inactive records",    icon: <Icon.Trash />,        color: "red"    },
+  { key: "total",    label: "Total Masters",    value: 13,     hint: "All master records",  icon: <Icon.Users />,       color: "blue"   },
+  { key: "active",   label: "Active Masters",   value: 13,     hint: "Active records",      icon: <Icon.CheckCircle />, color: "green"  },
+  { key: "inactive", label: "Inactive Masters", value: 0,      hint: "Inactive records",    icon: <Icon.Trash />,        color: "red"    },
   { key: "updated",  label: "Last Updated",     value: "Today", hint: "Recently updated",    icon: <Icon.Clock />,        color: "purple" },
 ];
 
@@ -145,10 +146,37 @@ const STATS = [
    ------------------------------------------------------------------ */
 export default function Masters({ onView, onAddNew }) {
   const navigate = useNavigate();
+  const [counts, setCounts] = useState({});
   const handleView = (key) => {
     if (onView) onView(key);
     else navigate(`/dashboard/masters/${key}`);
   };
+
+useEffect(() => {
+  const loadCounts = async () => {
+    try {
+      const data = await fetchAllMasters();
+      setCounts({
+        company: data.companies?.length || 0,
+        location: data.locations?.length || 0,
+        supplier: data.suppliers?.length || 0,
+        customer: data.customers?.length || 0,
+        fabric: data.fabrics?.length || 0,
+        quality: data.qualities?.length || 0,
+        design: data.designs?.length || 0,
+        color: data.colors?.length || 0,
+        uom: data.uoms?.length || 0,
+        transport: data.transports?.length || 0,
+        salesPerson: data.salespersons?.length || 0,
+        paymentmode: data.paymentModes?.length || 0,
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  loadCounts();
+}, []);
 
   return (
     <div className="master-page">
@@ -162,7 +190,7 @@ export default function Masters({ onView, onAddNew }) {
             <span className="master-breadcrumb__current">Masters</span>
           </div>
         </div>
-        <button className="master-btn master-btn--primary" onClick={onAddNew}>
+        <button className="master-btn master-btn--primary" onClick={onAddNew} disabled>
           <Icon.Plus /><span>Add New Master</span><Icon.ChevronDown />
         </button>
       </div>
@@ -178,7 +206,9 @@ export default function Masters({ onView, onAddNew }) {
                 <div className="master-card__subtitle">{m.subtitle}</div>
               </div>
             </div>
-            <div className="master-card__count">{m.count}</div>
+          <div className="master-card__count">
+  {counts[m.key] ?? 0}
+</div>
             <div className="master-card__count-label">{m.countLabel}</div>
             <button className="master-card__btn" onClick={() => handleView(m.key)}>
               View {m.title === "UOM" ? "UOMs" : m.title === "Customer" ? "Customers" : m.title === "Company" ? "Companies" : m.title + "s"}
