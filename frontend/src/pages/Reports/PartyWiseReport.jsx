@@ -34,7 +34,13 @@ const formatDate = (iso) => {
 const fmtNum = (n) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtInt = (n) => Number(n || 0).toLocaleString("en-IN");
 const fmtINR = (n) => "₹ " + fmtNum(n);
-const isoDate = (d) => d.toISOString().slice(0, 10);
+// 🆕 Local date (timezone-safe) — UTC me convert hone ki vajah se aaj ki date kal banti thi (IST)
+const isoDate = (d) => {
+  const year  = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day   = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const getPresetRange = (preset) => {
   const today = new Date();
@@ -53,13 +59,16 @@ const getPresetRange = (preset) => {
     case "last_month":
       from.setMonth(today.getMonth() - 1, 1); to.setDate(0); break;
     case "this_year": from.setMonth(0, 1); break;
-    case "all": return { from: "", to: "" };
-    default: return { from: "", to: "" };
+    case "all": return { fromDate: "", toDate: "" };                  // 🔧 fixed keys
+    default: return { fromDate: "", toDate: "" };                     // 🔧 fixed keys
   }
-  return { from: isoDate(from), to: isoDate(to) };
+  return { fromDate: isoDate(from), toDate: isoDate(to) };            // 🔧 fixed keys
 };
 
 const DATE_PRESETS = [
+  { key: "today",      label: "Today" },           // 🆕
+  { key: "yesterday",  label: "Yesterday" },        // 🆕
+  { key: "this_week",  label: "This Week" },        // 🆕
   { key: "this_month", label: "This Month" },
   { key: "last_month", label: "Last Month" },
   { key: "this_year",  label: "This Year" },
