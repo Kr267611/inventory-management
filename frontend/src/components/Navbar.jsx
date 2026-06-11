@@ -1,18 +1,3 @@
-// const Navbar = () => {
-//   return (
-//     <div className="navbar">
-//       <h3>Dashboard</h3>
-
-//       <div className="user">
-//         Admin User
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default Navbar;
-
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Navbar.css";

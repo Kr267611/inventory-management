@@ -77,9 +77,16 @@ const fmtNum = (n) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDi
 const fmtInt = (n) => Number(n || 0).toLocaleString("en-IN");
 const fmtINR = (n) => "₹ " + fmtNum(n);
 
-const isoDate = (d) => d.toISOString().slice(0, 10);
+// 🆕 Local date (timezone-safe) — toISOString UTC use karta hai jo IST se 5:30 piche ho jaata hai
+const isoDate = (d) => {
+  const year  = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day   = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 /* Date preset calculator — returns { from, to } in YYYY-MM-DD */
+/* Date preset calculator — returns { fromDate, toDate } in YYYY-MM-DD */
 const getPresetRange = (preset) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -109,9 +116,9 @@ const getPresetRange = (preset) => {
       from.setMonth(0, 1);
       break;
     default:
-      return { from: "", to: "" };
+      return { fromDate: "", toDate: "" };    // 🔧 fixed keys
   }
-  return { from: isoDate(from), to: isoDate(to) };
+  return { fromDate: isoDate(from), toDate: isoDate(to) };   // 🔧 fixed keys
 };
 
 const DATE_PRESETS = [

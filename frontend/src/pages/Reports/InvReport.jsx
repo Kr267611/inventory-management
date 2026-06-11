@@ -29,7 +29,7 @@ const fmtINR = (n) => "₹ " + fmtNum(n);
 const STATUS_CHIPS = [
   { key: "all", label: "All Items" },
   { key: "in", label: "In Stock" },
-  { key: "low", label: "Low Stock" },
+  { key: "low", label: "Partial Stock" },     // 🔧 renamed
   { key: "out", label: "Out of Stock" },
 ];
 
@@ -40,9 +40,9 @@ const EMPTY_FILTERS = {
 };
 
 const getStatus = (inv) => {
-  const avail = inv.availablePcs ?? inv.totalPcs ?? 0;       // 🆕 availablePcs use karo
+  const avail = inv.availablePcs ?? inv.totalPcs ?? 0;
   if (avail <= 0) return "Out of Stock";
-  if (avail <= (inv.minStockPcs || 2)) return "Low Stock";    // 🆕 default 2 (new schema)
+  if (avail <= (inv.minStockPcs || 2)) return "Partial Stock";    // 🔧 renamed
   return "In Stock";
 };
 
@@ -92,7 +92,7 @@ export default function InvReport() {
 
     // Status chip filter
     if (statusChip === "in")  list = list.filter((i) => getStatus(i) === "In Stock");
-    if (statusChip === "low") list = list.filter((i) => getStatus(i) === "Low Stock");
+    if (statusChip === "low") list = list.filter((i) => getStatus(i) === "Partial Stock");   // 🔧
     if (statusChip === "out") list = list.filter((i) => getStatus(i) === "Out of Stock");
 
     if (appliedFilters.fabric)        list = list.filter((i) => (i.fabric?._id || i.fabric) === appliedFilters.fabric);
@@ -134,7 +134,7 @@ export default function InvReport() {
     const totalPcs   = filteredInventory.reduce((s, i) => s + (i.availablePcs || 0), 0);    // 🆕
     const totalMeter = filteredInventory.reduce((s, i) => s + (i.availableMeter || 0), 0);  // 🆕
     const totalValue = filteredInventory.reduce((s, i) => s + (i.totalValue || 0), 0);
-    const lowStock   = filteredInventory.filter((i) => getStatus(i) === "Low Stock").length;
+    const lowStock   = filteredInventory.filter((i) => getStatus(i) === "Partial Stock").length;   // 🔧
     const outStock   = filteredInventory.filter((i) => getStatus(i) === "Out of Stock").length;
     return { totalItems, totalPcs, totalMeter, totalValue, lowStock, outStock };
   }, [filteredInventory]);
@@ -331,7 +331,7 @@ export default function InvReport() {
           <StatCard label="Total PCS"     value={fmtInt(summary.totalPcs)}   hint="Available"     tone="green"  icon={<Icon.Box />} />
           <StatCard label="Total Meter"   value={fmtNum(summary.totalMeter)} hint="In stock"      tone="purple" icon={<Icon.Ruler />} />
           <StatCard label="Total Value"   value={fmtINR(summary.totalValue)} hint="Stock value"   tone="amber"  icon={<Icon.Rupee />} />
-          <StatCard label="Low Stock"     value={fmtInt(summary.lowStock)}   hint="Need refill"   tone="orange" icon={<Icon.Alert />} />
+          <StatCard label="Partial Stock" value={fmtInt(summary.lowStock)}   hint="Below minimum" tone="orange" icon={<Icon.Alert />} />
           <StatCard label="Out of Stock"  value={fmtInt(summary.outStock)}   hint="No stock"      tone="red"    icon={<Icon.Alert />} />
         </div>
 
@@ -574,9 +574,9 @@ export default function InvReport() {
           display: inline-block; padding: 3px 10px;
           border-radius: 12px; font-size: 11px; font-weight: 600;
         }
-        .invrpt-badge--in-stock     { background: #d1fae5; color: #047857; }
-        .invrpt-badge--low-stock    { background: #ffedd5; color: #c2410c; }
-        .invrpt-badge--out-of-stock { background: #fee2e2; color: #b91c1c; }
+        .invrpt-badge--in-stock       { background: #d1fae5; color: #047857; }
+        .invrpt-badge--partial-stock  { background: #ffedd5; color: #c2410c; }     /* 🔧 renamed */
+        .invrpt-badge--out-of-stock   { background: #fee2e2; color: #b91c1c; }
 
         /* 🆕 Bale chip + input */
         .invrpt-bale-chip {

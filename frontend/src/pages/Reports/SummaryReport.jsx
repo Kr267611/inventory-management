@@ -25,6 +25,7 @@ const Icon = {
   Box: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>,
   AlertTriangle: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>,
   Activity: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>,
+  Calendar: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
 };
 
 /* ================================================================
@@ -77,6 +78,7 @@ const DATE_PRESETS = [
   { key: "this_year",  label: "This Year" },
   { key: "last_year",  label: "Last Year" },
   { key: "all",        label: "All Time" },
+  {key:"custom",label:"Custom"},
 ];
 
 const CHART_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899"];
@@ -95,6 +97,7 @@ export default function SummaryReport() {
 
   const [activePreset, setActivePreset] = useState("this_month");
   const [dateRange, setDateRange] = useState(getPresetRange("this_month"));
+  const [customRange, setCustomRange] = useState(getPresetRange("this_month")); // 🆕 typing state
 
   /* ──────── LOAD ──────── */
   useEffect(() => {
@@ -275,7 +278,30 @@ export default function SummaryReport() {
   /* ──────── HANDLERS ──────── */
   const applyPreset = (preset) => {
     setActivePreset(preset);
-    setDateRange(getPresetRange(preset));
+    if (preset === "custom") return;                  // 🆕 custom = user types dates
+    const range = getPresetRange(preset);
+    setDateRange(range);
+    setCustomRange(range);                            // 🆕 sync custom inputs too
+  };
+
+  // 🆕 Apply custom from/to
+  const applyCustomRange = () => {
+    if (!customRange.from && !customRange.to) {
+      return alert("Kam se kam ek date select karo");
+    }
+    if (customRange.from && customRange.to && customRange.from > customRange.to) {
+      return alert("From date To date se badi nahi ho sakti");
+    }
+    setActivePreset("custom");
+    setDateRange(customRange);
+  };
+
+  // 🆕 Reset to "This Month"
+  const resetDateRange = () => {
+    const range = getPresetRange("this_month");
+    setActivePreset("this_month");
+    setDateRange(range);
+    setCustomRange(range);
   };
 
   const exportCSV = () => {
@@ -388,6 +414,44 @@ export default function SummaryReport() {
             {p.label}
           </button>
         ))}
+      </div>
+
+      {/* 🆕 CUSTOM DATE RANGE */}
+      <div className="smry-card no-print smry-daterange-card">
+        <div className="smry-daterange">
+          <div className="smry-field">
+            <label className="smry-field__label">From Date</label>
+            <div className="smry-input-wrap">
+              <input
+                type="date"
+                className="smry-input"
+                value={customRange.from}
+                onChange={(e) => setCustomRange({ ...customRange, from: e.target.value })}
+              />
+              <span className="smry-input__icon"><Icon.Calendar /></span>
+            </div>
+          </div>
+          <div className="smry-field">
+            <label className="smry-field__label">To Date</label>
+            <div className="smry-input-wrap">
+              <input
+                type="date"
+                className="smry-input"
+                value={customRange.to}
+                onChange={(e) => setCustomRange({ ...customRange, to: e.target.value })}
+              />
+              <span className="smry-input__icon"><Icon.Calendar /></span>
+            </div>
+          </div>
+          <div className="smry-daterange__actions">
+            <button className="smry-btn smry-btn--ghost" onClick={resetDateRange}>
+              <Icon.Refresh /><span>Reset</span>
+            </button>
+            <button className="smry-btn smry-btn--primary" onClick={applyCustomRange}>
+              <Icon.Activity /><span>Apply Range</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* PRINT AREA */}
@@ -692,6 +756,48 @@ export default function SummaryReport() {
         .smry-dot--purple { background: #8b5cf6; }
         .smry-dot--green  { background: #10b981; }
 
+        /* 🆕 Custom Date Range card */
+        .smry-daterange-card {
+          margin-bottom: 0;
+        }
+        .smry-daterange {
+          display: grid;
+          grid-template-columns: 1fr 1fr auto;
+          gap: 14px;
+          align-items: end;
+        }
+        .smry-field {
+          display: flex; flex-direction: column; gap: 6px;
+          min-width: 0;
+        }
+        .smry-field__label {
+          font-size: 12px; font-weight: 500;
+          color: var(--smry-label);
+        }
+        .smry-input {
+          width: 100%; padding: 9px 12px;
+          border: 1px solid var(--smry-border);
+          border-radius: 8px; background: #fff;
+          font-size: 13px; color: var(--smry-text);
+          font-family: inherit;
+        }
+        .smry-input:focus {
+          outline: none;
+          border-color: var(--smry-primary);
+          box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+        }
+        .smry-input-wrap { position: relative; }
+        .smry-input-wrap .smry-input { padding-right: 34px; }
+        .smry-input__icon {
+          position: absolute; right: 10px; top: 50%;
+          transform: translateY(-50%);
+          color: var(--smry-muted);
+          pointer-events: none;
+        }
+        .smry-daterange__actions {
+          display: flex; gap: 8px;
+        }
+
         .smry-period-banner {
           background: #eff6ff; border: 1px solid #bfdbfe;
           border-radius: 10px; padding: 12px 18px;
@@ -823,6 +929,8 @@ export default function SummaryReport() {
           .smry-kpis { grid-template-columns: repeat(2, 1fr); }
           .smry-inv { grid-template-columns: repeat(2, 1fr); }
           .smry-quick-stats { grid-template-columns: repeat(2, 1fr); }
+          .smry-daterange { grid-template-columns: 1fr 1fr; }        /* 🆕 */
+          .smry-daterange__actions { grid-column: 1 / -1; justify-content: flex-end; }   /* 🆕 */
         }
         @media (max-width: 560px) {
           .smry-kpis { grid-template-columns: 1fr; }
@@ -831,6 +939,7 @@ export default function SummaryReport() {
           .smry-page__actions { width: 100%; }
           .smry-page__actions .smry-btn { flex: 1; justify-content: center; }
           .smry-preset { padding: 6px 12px; font-size: 12px; }
+          .smry-daterange { grid-template-columns: 1fr; }            /* 🆕 */
         }
 
         /* PRINT */
