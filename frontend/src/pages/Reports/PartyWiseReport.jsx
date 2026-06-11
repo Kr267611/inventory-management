@@ -74,9 +74,30 @@ const STATUS_FILTERS = [
   { key: "overdue",     label: "Overdue" },
 ];
 
+// 🆕 Company info for printable ledger
+const COMPANY_INFO = {
+  name:    "BHASKAR SILK MILLS PVT. LTD.",
+  address: "PLOT NO. 21, BLOCK NO. 296, Village: VILL. TANTITHAIYA, SURAT BARDOLI ROAD, SURAT, Gujarat, 394327",
+  phone:   "9825147345",
+  mobile:  "9825147395",
+  email:   "bhaskardyeing@gmail.com",
+  gstin:   "24AACCB3983A1Z3",
+  cin:     "U17111GJ2004PTC044093",
+};
+
+// 🆕 DD-MM-YY format for ledger (Tally style)
+const fmtLedgerDate = (d) => {
+  if (!d) return "-";
+  const date = new Date(d);
+  const day   = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year  = String(date.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+};
+
 const EMPTY_FILTERS = {
   fromDate: "", toDate: "",
-  customer: "", baleNo: "", search: "",     // 🆕 baleNo
+  customer: "", baleNo: "", search: "",
 };
 
 /* ================================================================
@@ -97,10 +118,60 @@ export default function PartyWiseReport() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   // Modal state — show ledger detail for one customer
-  const [detailModal, setDetailModal] = useState(null); // { ledger }
-  const [modalTab, setModalTab] = useState("sales");    // sales | payments
+  const [detailModal, setDetailModal] = useState(null);
+  const [modalTab, setModalTab] = useState("sales");
+  const [printMode, setPrintMode] = useState(null);     // 🆕 null | "ledger"
 
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
+
+  // 🆕 Build account-ledger entries (sales = Debit, payments = Credit) with running balance
+  const ledgerEntries = useMemo(() => {
+    if (!detailModal) return [];
+
+    // Combine sales + payments chronologically (oldest first)
+    const combined = [
+      ...detailModal.sales.map((s) => ({
+        date:       s.saleDate || s.createdAt,
+        ref:        s.invoiceNo || "-",
+        particular: "Sales A/C.",
+        debit:      s.netAmount || 0,
+        credit:     0,
+      })),
+      ...detailModal.payments.map((p) => ({
+        date:       p.paymentDate || p.createdAt,
+        ref:        p.paymentId || "-",
+        particular: `Payment - ${p.paymentMode?.name || "Cash"}`,
+        debit:      0,
+        credit:     p.amountReceived || 0,
+      })),
+    ].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Running balance
+    let bal = 0;
+    return combined.map((e) => {
+      bal += e.debit - e.credit;
+      return { ...e, balance: bal };
+    });
+  }, [detailModal]);
+
+  // 🆕 Ledger totals
+  const ledgerTotals = useMemo(() => {
+    const totalDebit  = ledgerEntries.reduce((s, e) => s + e.debit, 0);
+    const totalCredit = ledgerEntries.reduce((s, e) => s + e.credit, 0);
+    const balance     = totalDebit - totalCredit;
+    const isDr        = balance >= 0;
+    const grandTotal  = isDr ? totalDebit : totalCredit;
+    return { totalDebit, totalCredit, balance, isDr, grandTotal };
+  }, [ledgerEntries]);
+
+  // 🆕 Trigger ledger print
+  const handlePrintLedger = () => {
+    setPrintMode("ledger");
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => setPrintMode(null), 300);
+    }, 100);
+  };
 
   /* ──────── LOAD DATA ──────── */
   useEffect(() => {
@@ -764,7 +835,111 @@ export default function PartyWiseReport() {
 
             <div className="pwrpt-modal__footer">
               <button className="pwrpt-btn pwrpt-btn--ghost" onClick={() => setDetailModal(null)}>Close</button>
+              <button className="pwrpt-btn pwrpt-btn--primary" onClick={handlePrintLedger}>
+                <Icon.Printer /><span>Print Ledger</span>
+              </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════
+          🆕 LEDGER PRINT AREA (Tally style)
+          ════════════════════════════════ */}
+      {detailModal && (
+        <div className={`pwrpt-ledger-print ${printMode === "ledger" ? "pwrpt-ledger-print--active" : ""}`}>
+          {/* Company header */}
+          <div className="pwrpt-lp-header">
+            <h1 className="pwrpt-lp-company">{COMPANY_INFO.name}</h1>
+            <div className="pwrpt-lp-meta">{COMPANY_INFO.address}</div>
+            <div className="pwrpt-lp-meta">
+              PH.No.: {COMPANY_INFO.phone}, Mob No.: {COMPANY_INFO.mobile}, E-Mail: {COMPANY_INFO.email}
+            </div>
+            <div className="pwrpt-lp-meta">
+              GSTIN No.: {COMPANY_INFO.gstin}, CIN No.: {COMPANY_INFO.cin}
+            </div>
+          </div>
+
+          {/* Title bar */}
+          <div className="pwrpt-lp-title">ACCOUNT LEDGER</div>
+
+          {/* Customer + Period */}
+          <div className="pwrpt-lp-customer">
+            <div className="pwrpt-lp-cust-info">
+              <div className="pwrpt-lp-cust-name">{detailModal.customer.name}</div>
+              {detailModal.customer.address && <div>{detailModal.customer.address}</div>}
+              {detailModal.customer.gstNo && <div>{detailModal.customer.gstNo}</div>}
+            </div>
+            <div className="pwrpt-lp-period">
+              <div><strong>From :</strong>  {fmtLedgerDate(appliedFilters.fromDate || ledgerEntries[0]?.date || new Date())}</div>
+              <div><strong>Up To :</strong>  {fmtLedgerDate(appliedFilters.toDate || ledgerEntries[ledgerEntries.length - 1]?.date || new Date())}</div>
+            </div>
+          </div>
+
+          {/* Ledger table */}
+          <table className="pwrpt-lp-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Bill/Ref No</th>
+                <th>Particular</th>
+                <th className="r">Debit</th>
+                <th className="r">Credit</th>
+                <th className="r">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ledgerEntries.length === 0 ? (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+                    No transactions
+                  </td>
+                </tr>
+              ) : (
+                ledgerEntries.map((e, idx) => (
+                  <tr key={idx}>
+                    <td>{fmtLedgerDate(e.date)}</td>
+                    <td className="r">{e.ref}</td>
+                    <td>{e.particular}</td>
+                    <td className="r">{e.debit > 0 ? fmtNum(e.debit) : "0.00"}</td>
+                    <td className="r">{e.credit > 0 ? fmtNum(e.credit) : "0.00"}</td>
+                    <td className="r">
+                      {fmtNum(Math.abs(e.balance))} {e.balance >= 0 ? "Dr" : "Cr"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            {ledgerEntries.length > 0 && (
+              <tfoot>
+                <tr className="pwrpt-lp-subtotal">
+                  <td colSpan="3"></td>
+                  <td className="r">{fmtNum(ledgerTotals.totalDebit)}</td>
+                  <td className="r">{fmtNum(ledgerTotals.totalCredit)}</td>
+                  <td></td>
+                </tr>
+                <tr className="pwrpt-lp-cf">
+                  <td colSpan="2"></td>
+                  <td><strong>Balance c/f</strong></td>
+                  <td className="r">{fmtNum(ledgerTotals.isDr ? 0 : Math.abs(ledgerTotals.balance))}</td>
+                  <td className="r">{fmtNum(ledgerTotals.isDr ? ledgerTotals.balance : 0)}</td>
+                  <td className="r">
+                    <strong>{fmtNum(Math.abs(ledgerTotals.balance))} {ledgerTotals.isDr ? "Dr" : "Cr"}</strong>
+                  </td>
+                </tr>
+                <tr className="pwrpt-lp-grand">
+                  <td colSpan="3"></td>
+                  <td className="r"><strong>{fmtNum(ledgerTotals.grandTotal)}</strong></td>
+                  <td className="r"><strong>{fmtNum(ledgerTotals.grandTotal)}</strong></td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+
+          {/* Print-only footer */}
+          <div className="pwrpt-lp-footer">
+            <div>Generated on: {fmtLedgerDate(new Date())}</div>
           </div>
         </div>
       )}
@@ -1086,6 +1261,7 @@ export default function PartyWiseReport() {
           padding: 14px 20px;
           border-top: 1px solid var(--pwrpt-border);
           display: flex; justify-content: flex-end;
+          justify-content: space-between; flex-wrap: wrap; gap: 8px;
         }
 
         @media (max-width: 1400px) {
@@ -1110,6 +1286,117 @@ export default function PartyWiseReport() {
           .pwrpt-preset, .pwrpt-chip { padding: 6px 12px; font-size: 12px; }
         }
 
+        /* 🆕 LEDGER PRINT — hidden on screen, visible only when active during print */
+        .pwrpt-ledger-print {
+          display: none;
+          position: fixed;
+          left: 0; top: 0;
+          width: 100%;
+          background: #fff;
+          z-index: -1;
+        }
+        .pwrpt-ledger-print--active {
+          display: block;
+        }
+        .pwrpt-lp-header {
+          text-align: center;
+          padding: 20px;
+          border: 2px solid #333;
+          border-bottom: 1px solid #999;
+        }
+        .pwrpt-lp-company {
+          font-size: 22px;
+          font-weight: 700;
+          color: #1e3a8a;
+          margin: 0 0 8px 0;
+          letter-spacing: 0.5px;
+        }
+        .pwrpt-lp-meta {
+          font-size: 11px;
+          color: #333;
+          margin: 2px 0;
+        }
+        .pwrpt-lp-title {
+          text-align: center;
+          padding: 8px;
+          font-size: 16px;
+          font-weight: 700;
+          background: #d1d5db;
+          border-left: 2px solid #333;
+          border-right: 2px solid #333;
+          border-bottom: 1px solid #999;
+        }
+        .pwrpt-lp-customer {
+          display: flex;
+          justify-content: space-between;
+          padding: 12px 16px;
+          border-left: 2px solid #333;
+          border-right: 2px solid #333;
+          border-bottom: 1px solid #999;
+          font-size: 12px;
+        }
+        .pwrpt-lp-cust-name {
+          font-size: 14px;
+          font-weight: 700;
+          color: #1e3a8a;
+          margin-bottom: 4px;
+        }
+        .pwrpt-lp-period {
+          text-align: right;
+          font-size: 12px;
+          align-self: flex-end;
+        }
+        .pwrpt-lp-period > div {
+          margin: 2px 0;
+        }
+        .pwrpt-lp-table {
+          width: 100%;
+          border-collapse: collapse;
+          border-left: 2px solid #333;
+          border-right: 2px solid #333;
+          font-size: 11px;
+        }
+        .pwrpt-lp-table th {
+          background: #e5e7eb;
+          padding: 8px 10px;
+          text-align: left;
+          font-weight: 700;
+          border-bottom: 1px solid #333;
+          border-top: 1px solid #333;
+          font-size: 12px;
+        }
+        .pwrpt-lp-table td {
+          padding: 5px 10px;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        .pwrpt-lp-table .r {
+          text-align: right;
+        }
+        .pwrpt-lp-subtotal td {
+          border-top: 1px solid #999;
+          padding-top: 8px;
+          font-weight: 600;
+        }
+        .pwrpt-lp-cf td {
+          background: #fde68a;
+          padding: 8px 10px;
+          font-weight: 600;
+        }
+        .pwrpt-lp-grand td {
+          border-top: 1px solid #333;
+          border-bottom: 2px solid #333;
+          padding: 6px 10px;
+          font-weight: 700;
+        }
+        .pwrpt-lp-footer {
+          padding: 8px 16px;
+          font-size: 10px;
+          color: #666;
+          border-left: 2px solid #333;
+          border-right: 2px solid #333;
+          border-bottom: 2px solid #333;
+        }
+
         /* PRINT */
         @media print {
           body * { visibility: hidden; }
@@ -1117,6 +1404,29 @@ export default function PartyWiseReport() {
           .pwrpt-print-area { position: absolute; left: 0; top: 0; width: 100%; }
           .no-print { display: none !important; }
           .print-only { display: block !important; }
+
+          /* 🆕 When ledger print active, hide main print area, show ledger */
+          .pwrpt-ledger-print--active,
+          .pwrpt-ledger-print--active * { visibility: visible !important; }
+          .pwrpt-ledger-print--active {
+            display: block !important;
+            position: absolute !important;
+            left: 0; top: 0;
+            width: 100%;
+            z-index: 9999;
+          }
+          /* Hide everything else when ledger printing */
+          body:has(.pwrpt-ledger-print--active) .pwrpt-print-area,
+          body:has(.pwrpt-ledger-print--active) .pwrpt-modal-overlay {
+            visibility: hidden !important;
+            display: none !important;
+          }
+
+          /* Ledger print colors */
+          .pwrpt-lp-title { background: #d1d5db !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .pwrpt-lp-table th { background: #e5e7eb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .pwrpt-lp-cf td { background: #fde68a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .pwrpt-lp-table tbody tr { page-break-inside: avoid; }
 
           .pwrpt-print-header {
             text-align: center; margin-bottom: 20px;
