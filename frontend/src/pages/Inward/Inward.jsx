@@ -80,6 +80,9 @@ const EMPTY_FORM = {
   lotNo: "", rack: "",
   weight: 0, weaver: "", gsm: "", width: "", remarks: "",
   currencyType: "INR", rate: 0, exchangeRate: 1,
+  pcsCount: 0,  // pcs count drives auto-rows
+  totalMeterInput: 0,
+  sqMtr: 0, grossWeight: 0, netWeight: 0,
 };
 
 export default function InwardEntry() {
@@ -163,18 +166,28 @@ export default function InwardEntry() {
   const summary = useMemo(() => {
     const totalPcs = pcsDetails.length;
     const totalMeter = pcsDetails.reduce((s, p) => s + (parseFloat(p.meter) || 0), 0);
-    const avgMeter = totalPcs ? totalMeter / totalPcs : 0;
-    const rate = parseFloat(form.rate) || 0;
-    const greyAmount = totalMeter * rate;
+    const totalSqMtr = pcsDetails.reduce((s, p) => s + (parseFloat(p.sqMtr) || 0), 0);
+    const totalGWht = pcsDetails.reduce((s, p) => s + (parseFloat(p.grossWeight) || 0), 0);
+    const totalNWht = pcsDetails.reduce((s, p) => s + (parseFloat(p.netWeight) || 0), 0);
+
+    const rateINR = parseFloat(form.rate) || 0;
+    const exRate = parseFloat(form.exchangeRate) || 1;
+    const rateNGN = rateINR * exRate;
+    const totalINR = totalMeter * rateINR;
+    const totalNGN = totalMeter * rateNGN;
+
     return {
       totalPcs,
       totalMeter: totalMeter.toFixed(2),
-      avgMeter: avgMeter.toFixed(2),
-      greyRate: rate.toFixed(2),
-      greyAmount: greyAmount.toFixed(2),
-      adjDiff: "0.000",
+      totalSqMtr: totalSqMtr.toFixed(2),
+      totalGWht: totalGWht.toFixed(3),
+      totalNWht: totalNWht.toFixed(3),
+      rateINR: rateINR.toFixed(2),
+      rateNGN: rateNGN.toFixed(2),
+      totalINR: totalINR.toFixed(2),
+      totalNGN: totalNGN.toFixed(2),
     };
-  }, [pcsDetails, form.rate]);
+  }, [pcsDetails, form.rate, form.exchangeRate]);
 
   /* ──────── HANDLERS ──────── */
   const handle = (field, value) => setForm({ ...form, [field]: value });
@@ -189,6 +202,76 @@ export default function InwardEntry() {
         color: form.defaultColor || "",
       },
     ]);
+  };
+
+  // 🆕 Auto-generate N rows when PCS count entered
+  const handlePcsCountChange = (count) => {
+    const n = Math.max(0, parseInt(count) || 0);
+    // 🆕 Calculate per-row meter if total is set
+    const currentTotal = parseFloat(form.totalMeterInput) || 0;
+    const perRow = n > 0 && currentTotal > 0 ? +(currentTotal / n).toFixed(3) : 0;
+
+    setForm({ ...form, pcsCount: n });
+
+    if (n === 0) {
+      setPcsDetails([]);
+      return;
+    }
+
+    if (n > pcsDetails.length) {
+      // Add new rows
+      const toAdd = n - pcsDetails.length;
+      // 🆕 Existing rows ko bhi redistribute if total set
+      const existingRows = perRow > 0
+        ? pcsDetails.map((p) => ({ ...p, meter: perRow }))
+        : pcsDetails;
+      const newRows = Array.from({ length: toAdd }, (_, i) => ({
+        id: Date.now() + Math.random() + i,
+        pcsNo: pcsDetails.length + i + 1,
+        meter: perRow,                                       // 🆕 auto-fill from total
+        sqMtr: 0,
+        grossWeight: 0,
+        netWeight: 0,
+        color: form.defaultColor || "",                      // uses MIX if defaultColor set to MIX
+      }));
+      setPcsDetails([...existingRows, ...newRows]);
+    } else if (n < pcsDetails.length) {
+      const removing = pcsDetails.length - n;
+      if (window.confirm(`Last ${removing} row(s) delete ho jaayenge. Confirm?`)) {
+        let trimmed = pcsDetails.slice(0, n);
+        // 🆕 Redistribute remaining
+        if (perRow > 0) {
+          trimmed = trimmed.map((p) => ({ ...p, meter: perRow }));
+        }
+        setPcsDetails(trimmed);
+      } else {
+        setForm({ ...form, pcsCount: pcsDetails.length });
+      }
+    }
+  };
+
+  // 🆕 Update individual cell in PCS row
+  const updatePcsCell = (id, field, value) => {
+    setPcsDetails(pcsDetails.map((p) =>
+      p.id === id ? { ...p, [field]: value } : p
+    ));
+  };
+
+  // 🆕 Total meter input — auto-distribute equally across all rows
+  const handleTotalMeterChange = (value) => {
+    setForm({ ...form, totalMeterInput: value });
+
+    const total = parseFloat(value) || 0;
+    if (total > 0 && pcsDetails.length > 0) {
+      const perRow = +(total / pcsDetails.length).toFixed(3);
+      // Sab rows me equal meter assign karo
+      setPcsDetails(pcsDetails.map((p) => ({
+        ...p,
+        meter: perRow,
+        // color stays from defaultColor (set "MIX" if needed)
+        color: p.color || form.defaultColor || "",
+      })));
+    }
   };
 
   const deletePcs = (id) => {
@@ -229,12 +312,11 @@ export default function InwardEntry() {
 
   /* ──────── SAVE / UPDATE ──────── */
   const handleSave = async () => {
-    if (!form.voucherNo) return alert("Voucher No daalo");
-    if (!form.baleNo) return alert("Bale No daalo (e.g. A35, 1224)");   // 🆕 validation
-    if (!form.supplier) return alert("Supplier select karo");
+    if (!form.baleNo) return alert("Bale No daalo (e.g. A35, 1224)");
     if (!form.fabric) return alert("Fabric select karo");
-    if (!form.rate || parseFloat(form.rate) <= 0) return alert("Grey Rate enter karo");
-    if (pcsDetails.length === 0) return alert("Kam se kam ek PCS add karo");
+    if (!form.fabricQuality) return alert("Fabric Quality select karo");
+    if (!form.rate || parseFloat(form.rate) <= 0) return alert("Rate INR enter karo");
+    if (pcsDetails.length === 0) return alert("Pcs Count enter karo (rows auto-generate honge)");
 
     const payload = {
       ...form,
@@ -242,19 +324,31 @@ export default function InwardEntry() {
       rate: parseFloat(form.rate) || 0,
       exchangeRate: parseFloat(form.exchangeRate) || 1,
       weight: parseFloat(form.weight) || 0,
-      pcsDetails: pcsDetails.map((p, i) => ({
-        pcsNo: i + 1,
-        meter: parseFloat(p.meter) || 0,
-        color: p.color || form.defaultColor || undefined,
-      })),
+      pcsDetails: pcsDetails.map((p, i) => {
+        const row = {
+          pcsNo: i + 1,
+          meter: parseFloat(p.meter) || 0,
+        };
+        // 🆕 Color only if valid ObjectId (24-char hex), warna skip
+        const c = p.color || form.defaultColor;
+        if (c && c.length === 24) {
+          row.color = c;
+        }
+        return row;
+      }),
     };
 
     console.log("Payload to save:", payload);
 
     // Empty optional ObjectId fields ko bhejna nahi (warna Mongoose cast error)
-    ["fabricQuality", "design", "defaultColor", "uom", "processType", "container"].forEach((k) => {
+    ["fabricQuality", "design", "defaultColor", "uom", "processType", "container", "supplier", "company", "location",].forEach((k) => {
       if (!payload[k]) delete payload[k];
     });
+
+    // strip frontend-only fields
+    delete payload.pcsCount;
+    delete payload.totalMeterInput;
+    debugger;
 
     try {
       setSaving(true);
@@ -310,247 +404,277 @@ export default function InwardEntry() {
       </div>
 
       {/* Content grid */}
-      <div className="inward-content">
-        {/* LEFT */}
-        <div className="inward-content__left">
-          {/* 🆕 BALE NO highlighted banner */}
-          <section className="inward-card inward-bale-card">
-            <div className="inward-bale-row">
-              <div className="inward-bale-icon"><Icon.Tag /></div>
-              <div className="inward-bale-label">
-                <div className="inward-bale-label__title">Bale Number <span className="inward-field__required">*</span></div>
-                <div className="inward-bale-label__hint">
-                  Unique physical identifier for this bale (e.g. A35, A59, 1224, 163)
-                </div>
-              </div>
+      {/* Content — Single column layout */}
+      <div className="inward-content-v2">
+
+        {/* ════════════════════════════════
+            🆕 TOP STRIP — Date + Bale No
+            ════════════════════════════════ */}
+        <section className="inward-card inward-top-strip">
+          <Field label="Entry Date" required>
+            <div className="inward-input-wrap">
               <input
-                className="inward-input inward-bale-input"
-                placeholder="A35"
-                value={form.baleNo}
-                onChange={(e) => handle("baleNo", e.target.value.toUpperCase())}
-                disabled={!!editId}
-                title={editId ? "Bale No cannot be changed in edit mode" : ""}
+                type="date"
+                className="inward-input"
+                value={form.entryDate}
+                onChange={(e) => handle("entryDate", e.target.value)}
               />
+              <span className="inward-input__icon"><Icon.Calendar /></span>
             </div>
-          </section>
+          </Field>
+          <Field label="Bale No" required>
+            <input
+              className="inward-input inward-bale-input-v2"
+              placeholder="A35"
+              value={form.baleNo}
+              onChange={(e) => handle("baleNo", e.target.value.toUpperCase())}
+              disabled={!!editId}
+              title={editId ? "Bale No cannot be changed in edit mode" : ""}
+            />
+          </Field>
+          <Field label="Voucher No">
+            <input
+              className="inward-input"
+              placeholder="Optional"
+              value={form.voucherNo}
+              onChange={(e) => handle("voucherNo", e.target.value)}
+            />
+          </Field>
+        </section>
 
-          {/* Inward Information */}
-          <section className="inward-card">
-            <h2 className="inward-card__title">Inward Information</h2>
-            <div className="inward-grid">
-              <Field label="Inward Date" required>
-                <div className="inward-input-wrap">
-                  <input type="date" className="inward-input" value={form.entryDate} onChange={(e) => handle("entryDate", e.target.value)} />
-                  <span className="inward-input__icon"><Icon.Calendar /></span>
-                </div>
-              </Field>
-              <Field label="Voucher No" required>
-                <input className="inward-input" value={form.voucherNo} onChange={(e) => handle("voucherNo", e.target.value)} />
-              </Field>
+        {/* ════════════════════════════════
+            🆕 SECTION 1 — REQUIRED FIELDS
+            ════════════════════════════════ */}
+        <section className="inward-card inward-section-required">
+          <div className="inward-section-badge">REQUIRED FIELDS</div>
+          <div className="inward-grid-v2">
+            <Field label="Fabric Name" required>
+              <MasterSelect value={form.fabric} onChange={(v) => handle("fabric", v)} options={masters.fabrics} />
+            </Field>
+            <Field label="Fabric Quality" required>
+              <MasterSelect value={form.fabricQuality} onChange={(v) => handle("fabricQuality", v)} options={masters.qualities} />
+            </Field>
+            <Field label="Design No">
+              <MasterSelect value={form.design} onChange={(v) => handle("design", v)} options={masters.designs} labelKey="designNo" />
+            </Field>
+            <Field label="Color">
+              <MasterSelect value={form.defaultColor} onChange={(v) => handle("defaultColor", v)} options={masters.colors} />
+            </Field>
+            <Field label="Pcs (Count)" required>
+              <input
+                className="inward-input inward-input--highlight"
+                type="number"
+                min="0"
+                placeholder="15"
+                value={form.pcsCount || pcsDetails.length || ""}
+                onChange={(e) => handlePcsCountChange(e.target.value)}
+              />
+            </Field>
+            <Field label="Total Meter (Qty)" required>
+              {/* 🆕 USER ENTERS TOTAL — auto-distribute equally */}
+              <input
+                className="inward-input inward-input--highlight"
+                type="number"
+                step="0.01"
+                placeholder="274"
+                value={form.totalMeterInput || ""}
+                onChange={(e) => handleTotalMeterChange(e.target.value)}
+              />
+            </Field>
+            <Field label="Per Row" >
+              {/* 🆕 Auto display: total / pcs */}
+              <input
+                className="inward-input inward-input--readonly"
+                readOnly
+                value={
+                  form.pcsCount > 0 && parseFloat(form.totalMeterInput) > 0
+                    ? (parseFloat(form.totalMeterInput) / form.pcsCount).toFixed(3) + " m"
+                    : "—"
+                }
+              />
+            </Field>
+            <Field label="Actual Sum (after edits)">
+              {/* Existing sum display - shows after manual edits */}
+              <input
+                className="inward-input inward-input--readonly"
+                readOnly
+                value={summary.totalMeter + " m"}
+              />
+            </Field>
+            <Field label="UOM">
+              <MasterSelect value={form.uom} onChange={(v) => handle("uom", v)} options={masters.uoms} />
+            </Field>
+            <Field label="Sq. Meter">
+              <input
+                className="inward-input"
+                type="number"
+                step="0.001"
+                value={form.sqMtr}
+                onChange={(e) => handle("sqMtr", e.target.value)}
+              />
+            </Field>
 
-              <Field label="Company" required>
-                <MasterSelect value={form.company} onChange={(v) => handle("company", v)} options={masters.companies} />
-              </Field>
-              <Field label="Location" required>
-                <MasterSelect value={form.location} onChange={(v) => handle("location", v)} options={masters.locations} />
-              </Field>
+            <Field label="G.Wht">
+              <input
+                className="inward-input"
+                type="number"
+                step="0.001"
+                value={form.grossWeight}
+                onChange={(e) => handle("grossWeight", e.target.value)}
+              />
+            </Field>
 
-              <Field label="Supplier / Party" required>
-                <MasterSelect value={form.supplier} onChange={(v) => handle("supplier", v)} options={masters.suppliers} />
-              </Field>
-              <Field label="GST No">
-                <input className="inward-input" value={form.gstNo} onChange={(e) => handle("gstNo", e.target.value)} />
-              </Field>
-              <Field label="Challan No">
-                <input className="inward-input" value={form.challanNo} onChange={(e) => handle("challanNo", e.target.value)} />
-              </Field>
-              <Field label="Invoice / Bill No">
-                <input className="inward-input" value={form.invoiceNo} onChange={(e) => handle("invoiceNo", e.target.value)} />
-              </Field>
+            <Field label="N.Wht">
+              <input
+                className="inward-input"
+                type="number"
+                step="0.001"
+                value={form.netWeight}
+                onChange={(e) => handle("netWeight", e.target.value)}
+              />
+            </Field>
+          </div>
+        </section>
 
-              <Field label="Quality" required>
-                <MasterSelect value={form.fabricQuality} onChange={(v) => handle("fabricQuality", v)} options={masters.qualities} />
-              </Field>
-              <Field label="HSN Code">
-                <input className="inward-input" value={form.hsnCode} onChange={(e) => handle("hsnCode", e.target.value)} />
-              </Field>
-              <Field label="LR No">
-                <input className="inward-input" placeholder="Enter LR No" value={form.lrNo} onChange={(e) => handle("lrNo", e.target.value)} />
-              </Field>
-              <Field label="Transport">
-                <input className="inward-input" value={form.transport} onChange={(e) => handle("transport", e.target.value)} />
-              </Field>
-
-              <Field label="Fabric / Item" required>
-                <MasterSelect value={form.fabric} onChange={(v) => handle("fabric", v)} options={masters.fabrics} />
-              </Field>
-              <Field label="Design">
-                <MasterSelect value={form.design} onChange={(v) => handle("design", v)} options={masters.designs} labelKey="designNo" />
-              </Field>
-              <Field label="Color">
-                <MasterSelect value={form.defaultColor} onChange={(v) => handle("defaultColor", v)} options={masters.colors} />
-              </Field>
-              <Field label="Process Type">
-                <Select value={form.processType} onChange={(v) => handle("processType", v)} options={["", "DYEING", "PRINTING", "FINISHING"]} />
-              </Field>
-
-              <Field label="Inv. Type">
-                <input className="inward-input" value={form.invType} onChange={(e) => handle("invType", e.target.value)} />
-              </Field>
-              <Field label="Lot No" required>
-                <input className="inward-input" value={form.lotNo} onChange={(e) => handle("lotNo", e.target.value)} />
-              </Field>
-              <Field label="Rack">
-                <input className="inward-input" value={form.rack} onChange={(e) => handle("rack", e.target.value)} />
-              </Field>
-              <Field label="Weight (KG)">
-                <input className="inward-input" type="number" step="0.001" value={form.weight} onChange={(e) => handle("weight", e.target.value)} />
-              </Field>
-
-              <Field label="Weaver">
-                <input className="inward-input" value={form.weaver} onChange={(e) => handle("weaver", e.target.value)} />
-              </Field>
-              <Field label="GSM">
-                <input className="inward-input" value={form.gsm} onChange={(e) => handle("gsm", e.target.value)} />
-              </Field>
-              <Field label="Width">
-                <input className="inward-input" value={form.width} onChange={(e) => handle("width", e.target.value)} />
-              </Field>
-              <Field label="UOM">
-                <MasterSelect value={form.uom} onChange={(v) => handle("uom", v)} options={masters.uoms} />
-              </Field>
-
-              <Field label="Remarks">
-                <input className="inward-input" value={form.remarks} onChange={(e) => handle("remarks", e.target.value)} />
-              </Field>
-              <Field label="Currency Type">
-                <Select value={form.currencyType} onChange={(v) => handle("currencyType", v)} options={["INR", "USD", "NGN"]} />
-              </Field>
-              <Field label="Grey Rate (Per Mtr)" required>
-                <input className="inward-input" type="number" step="0.01" value={form.rate} onChange={(e) => handle("rate", e.target.value)} />
-              </Field>
-              <Field label="Exchange Rate">
-                <input className="inward-input" type="number" step="0.01" value={form.exchangeRate} onChange={(e) => handle("exchangeRate", e.target.value)} />
-              </Field>
-              <Field label="Grey Amount">
-                <input className="inward-input inward-input--readonly" readOnly value={Number(summary.greyAmount).toFixed(2)} />
-              </Field>
-            </div>
-          </section>
-
-          {/* PCS Details */}
-          <section className="inward-card">
-            <div className="inward-pcs-header">
-              <div>
-                <h2 className="inward-card__title inward-card__title--inline">PCS / Taka Details</h2>
-                <div className="inward-pcs-hint">
-                  <Icon.Info />
-                  <span>Add multiple PCS (Taka) with meter and color details</span>
-                </div>
+        {/* ════════════════════════════════
+            🆕 SECTION 2 — USER ENTRY (PCS Table)
+            ════════════════════════════════ */}
+        <section className="inward-card inward-section-entry">
+          <div className="inward-section-badge inward-section-badge--green">USER ENTRY</div>
+          <div className="inward-pcs-header">
+            <div>
+              <h2 className="inward-card__title inward-card__title--inline">
+                PCS Details ({pcsDetails.length} rows)
+              </h2>
+              <div className="inward-pcs-hint">
+                <Icon.Info />
+                <span>Pcs Count enter karte hi rows auto-generate honge</span>
               </div>
-              <button className="inward-btn inward-btn--primary inward-btn--sm" onClick={addPcs}>
-                <Icon.Plus /><span>Add PCS</span>
-              </button>
             </div>
+            <button className="inward-btn inward-btn--ghost inward-btn--sm" onClick={addPcs}>
+              <Icon.Plus /><span>Add Row</span>
+            </button>
+          </div>
 
-            <div className="inward-table-wrap">
-              <table className="inward-table">
-                <thead>
+          <div className="inward-table-wrap">
+            <table className="inward-table">
+              <thead>
+                <tr>
+                  <th className="inward-th inward-th--center">PCS</th>
+                  <th className="inward-th inward-th--center">Meter</th>
+                  <th className="inward-th inward-th--center">Color</th>
+                  <th className="inward-th inward-th--center">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pcsDetails.length === 0 ? (
                   <tr>
-                    <th className="inward-th inward-th--center">PCS No.</th>
-                    <th className="inward-th inward-th--center">Meter</th>
-                    <th className="inward-th inward-th--center">Color</th>
-                    <th className="inward-th inward-th--center">Action</th>
+                    <td colSpan="4" className="inward-td inward-td--empty">
+                      Pcs Count enter karo upar to auto rows aaye, ya "Add Row" se manually add karo
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {pcsDetails.length === 0 && (
-                    <tr>
-                      <td className="inward-td inward-td--empty" colSpan="4">No PCS added yet. Click "Add PCS" to start.</td>
+                ) : (
+                  pcsDetails.map((row) => (
+                    <tr key={row.id} className="inward-tr">
+                      <td className="inward-td inward-td--center">{row.pcsNo}</td>
+                      <td className="inward-td inward-td--center">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="inward-input inward-input--cell"
+                          value={row.meter}
+                          onChange={(e) => updatePcsCell(row.id, "meter", e.target.value)}
+                        />
+                      </td>
+                      <td className="inward-td inward-td--center">
+                        <select
+                          className="inward-select inward-input--cell"
+                          style={{ minWidth: 90 }}
+                          value={row.color}
+                          onChange={(e) => updatePcsCell(row.id, "color", e.target.value)}
+                        >
+                          <option value="">Select...</option>
+                          {masters.colors.map(c => (
+                            <option key={c._id} value={c._id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="inward-td inward-td--center">
+                        <button
+                          className="inward-icon-action inward-icon-action--delete"
+                          onClick={() => deletePcs(row.id)}
+                          title="Delete"
+                        >
+                          <Icon.Trash />
+                        </button>
+                      </td>
                     </tr>
-                  )}
-                  {pcsDetails.map((row) => {
-                    const colorName = masters.colors.find((c) => c._id === row.color)?.name || "-";
-                    return (
-                      <tr key={row.id} className="inward-tr">
-                        <td className="inward-td inward-td--center">{row.pcsNo}</td>
-                        <td className="inward-td inward-td--center">
-                          {editingId === row.id ? (
-                            <input className="inward-input inward-input--inline" type="number" step="0.01"
-                              value={editDraft.meter}
-                              onChange={(e) => setEditDraft({ ...editDraft, meter: e.target.value })} />
-                          ) : (
-                            Number(row.meter).toFixed(2)
-                          )}
-                        </td>
-                        <td className="inward-td inward-td--center">
-                          {editingId === row.id ? (
-                            <select className="inward-input inward-input--inline"
-                              value={editDraft.color}
-                              onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })}>
-                              <option value="">-</option>
-                              {masters.colors.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
-                            </select>
-                          ) : (
-                            <span className="inward-chip">{colorName}</span>
-                          )}
-                        </td>
-                        <td className="inward-td inward-td--center">
-                          <div className="inward-actions">
-                            {editingId === row.id ? (
-                              <button className="inward-icon-action inward-icon-action--save" onClick={() => saveEdit(row.id)} title="Save">
-                                <Icon.Check />
-                              </button>
-                            ) : (
-                              <button className="inward-icon-action inward-icon-action--edit" onClick={() => startEdit(row)} title="Edit">
-                                <Icon.Edit />
-                              </button>
-                            )}
-                            <button className="inward-icon-action inward-icon-action--delete" onClick={() => deletePcs(row.id)} title="Delete">
-                              <Icon.Trash />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
+                  ))
+                )}
+              </tbody>
+              {pcsDetails.length > 0 && (
+                <tfoot>
+                  <tr className="inward-total-row">
+                    <td className="inward-td inward-td--center inward-td--strong">TOTAL</td>
+                    <td className="inward-td inward-td--center inward-td--strong">{summary.totalMeter}</td>
+                    <td className="inward-td inward-td--center inward-td--strong">—</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </section>
 
-        {/* RIGHT — Summary */}
-        <aside className="inward-content__right">
-          <section className="inward-card">
-            <h2 className="inward-card__title">Inward Summary</h2>
-
-            {/* 🆕 Bale No display in summary */}
-            {form.baleNo && (
-              <div className="inward-bale-summary">
-                <div className="inward-bale-summary__label">Bale No</div>
-                <div className="inward-bale-summary__value">{form.baleNo}</div>
-              </div>
-            )}
-
-            <div className="inward-summary-grid">
-              <SummaryBox label="Total PCS (Taka)" value={summary.totalPcs} />
-              <SummaryBox label="Total Meter" value={summary.totalMeter} />
-              <SummaryBox label="Average Meter" value={summary.avgMeter} />
-              <SummaryBox label="Grey Rate (Per Mtr)" value={summary.greyRate} />
-            </div>
-            <div className="inward-highlight inward-highlight--blue">
-              <div className="inward-highlight__label">Grey Amount (INR)</div>
-              <div className="inward-highlight__value">
-                {Number(summary.greyAmount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div className="inward-highlight inward-highlight--green">
-              <div className="inward-highlight__label">Taka Adjustment Diff</div>
-              <div className="inward-highlight__value">{summary.adjDiff}</div>
-            </div>
-          </section>
-        </aside>
+        {/* ════════════════════════════════
+            🆕 SECTION 3 — AUTO CALCULATED
+            ════════════════════════════════ */}
+        <section className="inward-card inward-section-auto">
+          <div className="inward-section-badge inward-section-badge--purple">AUTO CALCULATED</div>
+          <div className="inward-grid-v2">
+            <Field label="Rate per Qty (INR)" required>
+              <input
+                className="inward-input inward-input--highlight"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={form.rate}
+                onChange={(e) => handle("rate", e.target.value)}
+              />
+            </Field>
+            <Field label="Exchange Rate">
+              <input
+                className="inward-input"
+                type="number"
+                step="0.01"
+                placeholder="1.00"
+                value={form.exchangeRate}
+                onChange={(e) => handle("exchangeRate", e.target.value)}
+              />
+            </Field>
+            <Field label="Rate per Qty (NGN)">
+              <input
+                className="inward-input inward-input--readonly"
+                readOnly
+                value={summary.rateNGN}
+              />
+            </Field>
+            <Field label="Total Amount (INR)">
+              <input
+                className="inward-input inward-input--readonly inward-input--total"
+                readOnly
+                value={summary.totalINR}
+              />
+            </Field>
+            <Field label="Total Amount (NGN)">
+              <input
+                className="inward-input inward-input--readonly inward-input--total"
+                readOnly
+                value={summary.totalNGN}
+              />
+            </Field>
+          </div>
+        </section>
       </div>
 
       <style>{`
@@ -597,9 +721,108 @@ export default function InwardEntry() {
         .inward-btn--primary:hover:not(:disabled) { background: var(--inw-primary-hover); }
         .inward-btn--sm { padding: 7px 12px; font-size: 13px; }
 
-        .inward-content {
-          display: grid; grid-template-columns: 1fr 320px;
-          gap: 20px; align-items: flex-start;
+        /* 🆕 V2 Layout — Single column */
+        .inward-content-v2 {
+          display: flex; flex-direction: column;
+          gap: 16px;
+        }
+
+        /* 🆕 Top strip with date + bale */
+        .inward-top-strip {
+          display: grid;
+          grid-template-columns: 1fr 1.5fr 1fr;
+          gap: 16px;
+          align-items: end;
+          background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+          border-color: #bfdbfe;
+        }
+        .inward-bale-input-v2 {
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          border: 2px solid var(--inw-primary) !important;
+        }
+
+        /* 🆕 Section badges */
+        .inward-section-badge {
+          display: inline-block;
+          padding: 4px 10px;
+          background: #dbeafe;
+          color: #1e3a8a;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.8px;
+          border-radius: 12px;
+          margin-bottom: 14px;
+        }
+        .inward-section-badge--green {
+          background: #d1fae5;
+          color: #065f46;
+        }
+        .inward-section-badge--purple {
+          background: #ede9fe;
+          color: #5b21b6;
+        }
+
+        /* 🆕 V2 grid - 3 columns */
+        .inward-grid-v2 {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 14px 20px;
+        }
+
+        /* 🆕 Section borders + colors */
+        .inward-section-required {
+          border-left: 4px solid #2563eb;
+        }
+        .inward-section-entry {
+          border-left: 4px solid #10b981;
+        }
+        .inward-section-auto {
+          border-left: 4px solid #8b5cf6;
+          background: #faf5ff;
+        }
+
+        /* 🆕 Highlight input (Pcs count, Rate INR) */
+        .inward-input--highlight {
+          border-color: var(--inw-primary) !important;
+          font-weight: 600 !important;
+          font-size: 15px !important;
+          background: #eff6ff !important;
+        }
+
+        /* 🆕 Total amount field — emphasized */
+        .inward-input--total {
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          color: #065f46 !important;
+          background: #ecfdf5 !important;
+        }
+
+        /* 🆕 PCS table cell input */
+        .inward-input--cell {
+          padding: 6px 8px !important;
+          font-size: 13px !important;
+          text-align: center !important;
+          max-width: 110px;
+          margin: 0 auto;
+        }
+
+        /* 🆕 Total row in table */
+        .inward-total-row td {
+          background: #f8fafc;
+          font-weight: 700;
+          border-top: 2px solid var(--inw-border);
+        }
+        .inward-td--strong { font-weight: 700; }
+
+        @media (max-width: 1100px) {
+          .inward-grid-v2 { grid-template-columns: repeat(2, 1fr); }
+          .inward-top-strip { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 640px) {
+          .inward-grid-v2 { grid-template-columns: 1fr; }
         }
         .inward-content__left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         .inward-content__right { display: flex; flex-direction: column; gap: 20px; }

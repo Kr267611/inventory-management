@@ -15,7 +15,8 @@ const pcsDetailSchema = new mongoose.Schema(
     color: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Color"
-    }
+    },
+
   },
   { _id: true } // har subdoc ka apna _id rahega → edit/delete me kaam aayega
 );
@@ -23,7 +24,7 @@ const pcsDetailSchema = new mongoose.Schema(
 const inwardSchema = new mongoose.Schema(
   {
     entryDate: { type: Date, required: true },
-    voucherNo: { type: String, required: true },
+    voucherNo: { type: String, required: false}, // auto-generated below
 
     // 🆕 BALE NO — unique physical identifier (A35, A59, 1224, 163...)
     baleNo: {
@@ -36,7 +37,7 @@ const inwardSchema = new mongoose.Schema(
     },
 
     // 🔥 MASTER LINKS
-    supplier:      { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", required: true },
+    supplier:      { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", required: false },
     company:       { type: mongoose.Schema.Types.ObjectId, ref: "Company" },
     location:      { type: mongoose.Schema.Types.ObjectId, ref: "Location" },
     fabric:        { type: mongoose.Schema.Types.ObjectId, ref: "Fabric" },
@@ -75,7 +76,6 @@ const inwardSchema = new mongoose.Schema(
         message: "Kam se kam ek PCS hona chahiye"
       }
     },
-
     // Weight info
     weight:      { type: Number, default: 0 }, // KG
     grossWeight: { type: Number, default: 0 },
@@ -85,6 +85,7 @@ const inwardSchema = new mongoose.Schema(
     // Currency & Rate
     currencyType: { type: String, enum: ["INR", "NGN", "USD"], default: "INR" },
     rate:         { type: Number, required: true, min: 0 }, // Grey Rate per meter
+    rateNGN:{ type: Number, min: 0 },
     exchangeRate: { type: Number, default: 1 },
 
     // 🔥 DERIVED FIELDS — auto-filled
@@ -93,6 +94,7 @@ const inwardSchema = new mongoose.Schema(
     averageMeter:       { type: Number, default: 0 },
     greyAmount:         { type: Number, default: 0 }, // totalMeter * rate
     baseCurrencyTotal:  { type: Number, default: 0 }, // greyAmount * exchangeRate
+    totalNGN:          { type: Number, default: 0 }, // totalNGN
     takaAdjustmentDiff: { type: Number, default: 0 }
   },
   { timestamps: true }

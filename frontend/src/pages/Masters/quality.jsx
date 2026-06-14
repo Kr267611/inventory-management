@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {qualityApi} from "../../Api/quality";
+import { isAdmin } from "../../utils/auth";  
 // 👆 baad me qualityApi banao to swap kar dena
 
 /* ------------------------------------------------------------------
@@ -219,7 +220,8 @@ export default function QualityMaster() {
                       <div className="quality-actions">
                         <button className="quality-icon-action quality-icon-action--view" title="View"><Icon.Eye /></button>
                         <button className="quality-icon-action quality-icon-action--edit" title="Edit" onClick={() => openEdit(q)}><Icon.Edit /></button>
-                        <button className="quality-icon-action quality-icon-action--delete" title="Delete" onClick={() => handleDelete(q._id)}><Icon.Trash /></button>
+                        <button className="quality-icon-action quality-icon-action--delete" title={isAdmin() ? "Delete" : "Only admin can delete"} onClick={() => handleDelete(q._id)}
+                          disabled={!isAdmin()}><Icon.Trash /></button>
                       </div>
                     </td>
                   </tr>
@@ -423,8 +425,17 @@ export default function QualityMaster() {
         .quality-icon-action--view:hover { background: #dbeafe; }
         .quality-icon-action--edit { background: #eff6ff; color: var(--ql-primary); }
         .quality-icon-action--edit:hover { background: #dbeafe; }
-        .quality-icon-action--delete { background: #fee2e2; color: var(--ql-danger); }
-        .quality-icon-action--delete:hover { background: #fecaca; }
+      .quality-icon-action--delete { background: #fee2e2; color: var(--ql-danger); }
+        .quality-icon-action--delete:hover:not(:disabled) { background: #fecaca; }
+        .quality-icon-action:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
+          background: #f1f5f9;
+          color: #94a3b8;
+        }
+        .quality-icon-action:disabled:hover {
+          background: #f1f5f9;
+        }
 
         .quality-pagination {
           padding: 12px 20px;

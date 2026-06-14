@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { colorApi } from "../../Api/color";
+import { isAdmin } from "../../utils/auth";
 
 /* ------------------------------------------------------------------
    ICONS
@@ -218,7 +219,8 @@ export default function ColorMaster() {
                       <div className="color-actions">
                         <button className="color-icon-action color-icon-action--view" title="View"><Icon.Eye /></button>
                         <button className="color-icon-action color-icon-action--edit" title="Edit" onClick={() => openEdit(c)}><Icon.Edit /></button>
-                        <button className="color-icon-action color-icon-action--delete" title="Delete" onClick={() => handleDelete(c._id)}><Icon.Trash /></button>
+                        <button className="color-icon-action color-icon-action--delete" title={isAdmin()?"Delete":"Only admin can delete"} onClick={() => handleDelete(c._id)}
+                          disabled={!isAdmin()}><Icon.Trash /></button>
                       </div>
                     </td>
                   </tr>
@@ -423,7 +425,16 @@ export default function ColorMaster() {
         .color-icon-action--edit { background: #eff6ff; color: var(--cl-primary); }
         .color-icon-action--edit:hover { background: #dbeafe; }
         .color-icon-action--delete { background: #fee2e2; color: var(--cl-danger); }
-        .color-icon-action--delete:hover { background: #fecaca; }
+        .color-icon-action--delete:hover:not(:disabled) { background: #fecaca; }
+        .color-icon-action:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
+          background: #f1f5f9;
+          color: #94a3b8;
+        }
+        .color-icon-action:disabled:hover {
+          background: #f1f5f9;
+        }
 
         .color-pagination {
           padding: 12px 20px;

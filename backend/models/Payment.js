@@ -14,12 +14,12 @@ const paymentSchema = new mongoose.Schema({
   sale: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Sales",
-    required: true,
+    required: false,  // if the payment is advance, salee
   },
   company: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Company",
-    required: true,
+    required: false,
   },
   paymentMode: {
     type: mongoose.Schema.Types.ObjectId,                   // 👈 master ref, not enum
@@ -53,65 +53,73 @@ const paymentSchema = new mongoose.Schema({
 
 /* ──────── AUTO PAYMENT ID ──────── */
 paymentSchema.pre("validate", async function () {
-  if (this.paymentId) return ;
+  if (this.paymentId) return;
   const year = new Date().getFullYear();
   const count = await mongoose.model("Payment").countDocuments({
     paymentId: new RegExp(`^PAY-${year}-`),
   });
   this.paymentId = `PAY-${year}-${String(count + 1).padStart(4, "0")}`;
-  // next();
+  // 🔧 async function — no next() needed, comment hata diya
 });
 
 
 /* ──────── AUTO CALCULATIONS ──────── */
 paymentSchema.pre("save", async function () {
-  try {
-    const Sale = mongoose.model("Sales");
-
-    // 1. Sale fetch karke totalInvoiceAmount auto-fill
-    const sale = await Sale.findById(this.sale).select("netAmount");
-    if (!sale) return next(new Error("Linked sale not found"));
-    this.totalInvoiceAmount = sale.netAmount || 0;
-
-    // 2. Sum of previous payments for this sale (excluding self if edit)
-    const Payment = mongoose.model("Payment");
-    const prevPayments = await Payment.aggregate([
-      {
-        $match: {
-          sale: this.sale,
-          _id: { $ne: this._id },
-        },
-      },
-      { $group: { _id: null, total: { $sum: "$amountReceived" } } },
-    ]);
-    const alreadyPaid = prevPayments[0]?.total || 0;
-
-    // 3. Outstanding calculations
-    this.outstandingBefore = this.totalInvoiceAmount - alreadyPaid;
-    this.outstandingAfter  = this.outstandingBefore - this.amountReceived;
-
-    // 4. Status decide
-    if (this.outstandingAfter < 0) {
-      // Overpaid — advance/credit
-      this.status = "Advance";
-    } else if (this.outstandingAfter === 0) {
-      this.status = "Full";
-    } else {
-      this.status = "Partial";
-    }
-
-    // 5. Safety check — over-payment block (optional, can warn instead)
-    if (this.amountReceived > this.outstandingBefore + 0.01) {
-      return next(new Error(
-        `Payment exceeds outstanding. Outstanding: ${this.outstandingBefore.toFixed(2)}, ` +
-        `Received: ${this.amountReceived.toFixed(2)}`
-      ));
-    }
-
-    // next();
-  } catch (err) {
-    // next(err);
+  // 🆕 ADVANCE PAYMENT — sale-related calcs skip karo
+  if (this.isAdvance || !this.sale) {
+    this.totalInvoiceAmount = 0;
+    this.outstandingBefore  = 0;
+    this.outstandingAfter   = 0;
+    this.status             = "Advance";
+    this.isAdvance          = true;        // ensure flag set
+    return;                                 // 🔧 just return, no next()
   }
+
+  // REGULAR PAYMENT — sale required
+  const Sale = mongoose.model("Sales");
+
+  // 1. Sale fetch karke totalInvoiceAmount auto-fill
+  const sale = await Sale.findById(this.sale).select("netAmount");
+  if (!sale) {
+    throw new Error("Linked sale not found");   // 🔧 throw instead of next()
+  }
+  this.totalInvoiceAmount = sale.netAmount || 0;
+
+  // 2. Sum of previous payments for this sale (excluding self if edit)
+  const Payment = mongoose.model("Payment");
+  const prevPayments = await Payment.aggregate([
+    {
+      $match: {
+        sale: this.sale,
+        _id: { $ne: this._id },
+      },
+    },
+    { $group: { _id: null, total: { $sum: "$amountReceived" } } },
+  ]);
+  const alreadyPaid = prevPayments[0]?.total || 0;
+
+  // 3. Outstanding calculations
+  this.outstandingBefore = +(this.totalInvoiceAmount - alreadyPaid).toFixed(2);
+  this.outstandingAfter  = +(this.outstandingBefore - this.amountReceived).toFixed(2);
+
+  // 4. Status decide
+  if (this.outstandingAfter < 0) {
+    this.status = "Advance";              // overpaid on this invoice
+  } else if (this.outstandingAfter === 0) {
+    this.status = "Full";
+  } else {
+    this.status = "Partial";
+  }
+
+  // 5. Safety check — over-payment block (excess should go as advance record via frontend)
+  if (this.amountReceived > this.outstandingBefore + 0.01) {
+    throw new Error(                       // 🔧 throw instead of next()
+      `Payment exceeds outstanding. Outstanding: ${this.outstandingBefore.toFixed(2)}, ` +
+      `Received: ${this.amountReceived.toFixed(2)}`
+    );
+  }
+
+  // 🔧 try/catch hata diya — async function me automatic propagation hoti hai
 });
 
 module.exports = mongoose.model("Payment", paymentSchema);

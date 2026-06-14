@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {fabricsApi} from "../../Api/fabricsApi";
+import { isAdmin } from "../../utils/auth";  
 // 👆 Note: ideally fabricApi banao iske liye. Abhi companyApi pe chal raha hai.
 
 /* ------------------------------------------------------------------
@@ -221,7 +222,14 @@ const handleSave = async () => {           // ← async add kar
                       <div className="fabric-actions">
                         <button className="fabric-icon-action fabric-icon-action--view" title="View"><Icon.Eye /></button>
                         <button className="fabric-icon-action fabric-icon-action--edit" title="Edit" onClick={() => openEdit(f)}><Icon.Edit /></button>
-                        <button className="fabric-icon-action fabric-icon-action--delete" title="Delete" onClick={() => handleDelete(f._id)}><Icon.Trash /></button>
+                        <button
+                          className="fabric-icon-action fabric-icon-action--delete"
+                          title={isAdmin() ? "Delete" : "Only admin can delete"}
+                          onClick={() => handleDelete(f._id)}
+                          disabled={!isAdmin()}                       /* 🆕 */
+                        >
+                          <Icon.Trash />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -426,7 +434,16 @@ const handleSave = async () => {           // ← async add kar
         .fabric-icon-action--edit { background: #eff6ff; color: var(--fb-primary); }
         .fabric-icon-action--edit:hover { background: #dbeafe; }
         .fabric-icon-action--delete { background: #fee2e2; color: var(--fb-danger); }
-        .fabric-icon-action--delete:hover { background: #fecaca; }
+        .fabric-icon-action--delete:hover:not(:disabled) { background: #fecaca; }
+        .fabric-icon-action:disabled {                                  /* 🆕 */
+          opacity: 0.35;
+          cursor: not-allowed;
+          background: #f1f5f9;
+          color: #94a3b8;
+        }
+        .fabric-icon-action:disabled:hover {                            /* 🆕 */
+          background: #f1f5f9;
+        }
 
         .fabric-pagination {
           padding: 12px 20px;

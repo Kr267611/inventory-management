@@ -38,16 +38,31 @@ async function refreshSalePaymentStatus(saleId) {
    ────────────────────────────────────────────── */
 router.post("/add", async (req, res) => {
   try {
-    // Sale exist karta hai check karo
+    const isAdvance = !!req.body.isAdvance;
+
+    // 🆕 ADVANCE PAYMENT branch — sale not required
+    if (isAdvance) {
+      if (!req.body.customer) {
+        return res.status(400).json({ message: "Customer required for advance payment" });
+      }
+      // Sale field hata do (agar accidentally aaya ho)
+      delete req.body.sale;
+
+      const payment = await Payment.create(req.body);
+      return res.status(201).json({
+        message: "Advance payment recorded successfully",
+        data: payment,
+      });
+    }
+
+    // REGULAR PAYMENT — sale required
+    if (!req.body.sale) {
+      return res.status(400).json({ message: "Sale required for normal payment" });
+    }
     const sale = await Sales.findById(req.body.sale);
     if (!sale) return res.status(404).json({ message: "Sale not found" });
 
-    // Payment create — pre-save hook automatically:
-    // - paymentId generate karega
-    // - totalInvoiceAmount sale se fetch karega
-    // - outstandingBefore/After calculate karega
-    // - status set karega (Partial/Full/Advance)
-    // - Over-payment block karega
+    // Payment create — pre-save hook chalega
     const payment = await Payment.create(req.body);
 
     // Sale ka paidAmount/balanceDue/paymentStatus refresh
@@ -58,6 +73,7 @@ router.post("/add", async (req, res) => {
       data: payment,
     });
   } catch (err) {
+    console.error("🔴 Payment create error:", err.message);
     res.status(500).json({
       message: "Error adding payment",
       error: err.message,
@@ -74,6 +90,8 @@ router.get("/", async (req, res) => {
     if (req.query.customer) filter.customer = req.query.customer;
     if (req.query.sale) filter.sale = req.query.sale;
     if (req.query.status) filter.status = req.query.status;
+    if (req.query.isAdvance === "true")  filter.isAdvance = true;     // 🆕
+    if (req.query.isAdvance === "false") filter.isAdvance = { $ne: true };  // 🆕
 
     // Date range
     if (req.query.fromDate || req.query.toDate) {
@@ -167,23 +185,28 @@ router.put("/:id", async (req, res) => {
     const old = await Payment.findById(req.params.id);
     if (!old) return res.status(404).json({ message: "Payment not found" });
 
-    // amountReceived ya sale change ho raha hai? track karo
-    const oldSaleId = old.sale;
+    const oldSaleId = old.sale;          // could be undefined (advance)
 
-    // Direct update with new() doesn't trigger pre-save with right context
-    // To re-run all hooks, mutate the doc and save
     Object.assign(old, req.body);
-    const updated = await old.save();   // pre-save hook chalega → outstandingBefore/After recalc
+    const updated = await old.save();
 
-    // Old sale ka status refresh (agar sale change hua hai)
-    if (oldSaleId && oldSaleId.toString() !== updated.sale.toString()) {
-      await refreshSalePaymentStatus(oldSaleId);
+    // 🔧 Safe handling — sale change ho ya na ho, both cases handle
+    // Refresh OLD sale (agar tha to)
+    if (oldSaleId) {
+      const oldStr = oldSaleId.toString();
+      const newStr = updated.sale ? updated.sale.toString() : null;
+      if (oldStr !== newStr) {
+        await refreshSalePaymentStatus(oldSaleId);
+      }
     }
-    // New sale ka status refresh
-    await refreshSalePaymentStatus(updated.sale);
+    // Refresh NEW sale (agar hai to)
+    if (updated.sale) {
+      await refreshSalePaymentStatus(updated.sale);
+    }
 
     res.json({ message: "Payment updated", data: updated });
   } catch (err) {
+    console.error("🔴 Payment update error:", err.message);
     res.status(500).json({
       message: "Error updating payment",
       error: err.message,

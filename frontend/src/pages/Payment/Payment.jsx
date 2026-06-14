@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { paymentApi } from "../../Api/paymentApi";
 import { salesApi } from "../../Api/sales";
 import { fetchAllMasters } from "../../Api/masterApi";
+import { isAdmin } from "../../utils/auth";
 
 /* ================================================================
    ICONS
@@ -31,7 +32,7 @@ const formatDate = (iso) => {
 
 const EMPTY_PAYMENT_FORM = {
   customer: "",
-  sale: "",
+  // 🔧 sale removed — ab multi-invoice allocations use karenge
   paymentDate: new Date().toISOString().slice(0, 10),
   paymentMode: "",
   referenceNo: "",
@@ -61,6 +62,8 @@ export default function Payment() {
   const [showAdd, setShowAdd] = useState(false);
 
   const [form, setForm] = useState(EMPTY_PAYMENT_FORM);
+  // 🆕 Multi-invoice allocations: { saleId: "amount" }
+  const [allocations, setAllocations] = useState({});
 
   // 👇 TWO filter states — user types in `filters`, table reads from `appliedFilters`
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -106,16 +109,59 @@ export default function Payment() {
     });
   }, [sales, form.customer]);
 
-  /* ──────── SELECTED SALE (for auto-fill) ──────── */
-  const selectedSale = useMemo(() => sales.find((s) => s._id === form.sale), [sales, form.sale]);
+  /* ──────── 🆕 TOTAL APPLIED across all selected invoices ──────── */
+  const totalApplied = useMemo(() => {
+    return Object.values(allocations).reduce((s, a) => s + (parseFloat(a) || 0), 0);
+  }, [allocations]);
 
-  /* ──────── BALANCE AFTER PAYMENT (live) ──────── */
-  const balanceAfter = useMemo(() => {
-    if (!selectedSale) return 0;
-    const out = selectedSale.balanceDue || 0;
+  /* ──────── 🆕 ADVANCE AMOUNT (excess over applied) ──────── */
+  const advanceAmount = useMemo(() => {
     const recv = parseFloat(form.amountReceived) || 0;
-    return Math.max(out - recv, 0);
-  }, [selectedSale, form.amountReceived]);
+    return Math.max(recv - totalApplied, 0);
+  }, [form.amountReceived, totalApplied]);
+
+  /* ──────── 🆕 ALLOCATION HANDLERS ──────── */
+  const toggleAllocation = (saleId, checked, balanceDue) => {
+    if (checked) {
+      // Auto-fill with min(balanceDue, remaining amount)
+      const recv = parseFloat(form.amountReceived) || 0;
+      const remaining = Math.max(recv - totalApplied, 0);
+      const defaultAmt = remaining > 0 ? Math.min(balanceDue, remaining) : balanceDue;
+      setAllocations((prev) => ({ ...prev, [saleId]: defaultAmt.toFixed(2) }));
+    } else {
+      setAllocations((prev) => {
+        const next = { ...prev };
+        delete next[saleId];
+        return next;
+      });
+    }
+  };
+
+  const setAllocAmount = (saleId, value) => {
+    setAllocations((prev) => ({ ...prev, [saleId]: value }));
+  };
+
+  // 🆕 Auto-allocate FIFO (oldest invoices first)
+  const autoAllocate = () => {
+    const recv = parseFloat(form.amountReceived) || 0;
+    if (recv <= 0) return alert("Pehle Amount Received daalo");
+
+    let remaining = recv;
+    const newAllocs = {};
+    // Sort by oldest first
+    const sorted = [...customerSales].sort(
+      (a, b) => new Date(a.saleDate) - new Date(b.saleDate)
+    );
+    for (const s of sorted) {
+      if (remaining <= 0) break;
+      const apply = Math.min(remaining, s.balanceDue || 0);
+      if (apply > 0) {
+        newAllocs[s._id] = apply.toFixed(2);
+        remaining -= apply;
+      }
+    }
+    setAllocations(newAllocs);
+  };
 
   /* ──────── FILTERED PAYMENTS (uses appliedFilters, not filters) ──────── */
   const filteredPayments = useMemo(() => {
@@ -222,46 +268,111 @@ export default function Payment() {
       ...EMPTY_PAYMENT_FORM,
       company: masters.companies[0]?._id || "",
     });
+    setAllocations({});                          // 🆕 reset
     setShowAdd(true);
   };
 
   const handleCustomerChange = (v) => {
-    setForm({ ...form, customer: v, sale: "" });
+    setForm({ ...form, customer: v });
+    setAllocations({});                          // 🆕 reset allocations on customer change
   };
 
   const handleSave = async () => {
+    // Basic validation
     if (!form.customer)    return alert("Customer select karo");
-    if (!form.sale)        return alert("Sale/Invoice select karo");
     if (!form.company)     return alert("Company select karo");
     if (!form.paymentMode) return alert("Payment Mode select karo");
-    if (!form.amountReceived || parseFloat(form.amountReceived) <= 0) {
-      return alert("Amount Received daalo (> 0)");
-    }
-    if (selectedSale && parseFloat(form.amountReceived) > selectedSale.balanceDue + 0.01) {
-      return alert(`Amount outstanding se zyaada hai! Outstanding: ₹${selectedSale.balanceDue.toFixed(2)}`);
+
+    const recv = parseFloat(form.amountReceived) || 0;
+    if (recv <= 0) return alert("Amount Received daalo (> 0)");
+
+    // Valid allocations (amount > 0)
+    const validAllocs = Object.entries(allocations)
+      .map(([saleId, amt]) => ({ saleId, amount: parseFloat(amt) || 0 }))
+      .filter((a) => a.amount > 0);
+
+    // Per-invoice over-allocation check
+    for (const a of validAllocs) {
+      const sale = sales.find((s) => s._id === a.saleId);
+      if (sale && a.amount > sale.balanceDue + 0.01) {
+        return alert(
+          `Invoice ${sale.invoiceNo}: applied ₹${a.amount} > due ₹${sale.balanceDue.toFixed(2)}`
+        );
+      }
     }
 
-    const payload = {
-      paymentDate: form.paymentDate,
-      customer: form.customer,
-      sale: form.sale,
-      company: form.company,
-      paymentMode: form.paymentMode,
-      receivedBy: form.receivedBy || undefined,
-      amountReceived: parseFloat(form.amountReceived),
-      referenceNo: form.referenceNo,
-      remarks: form.remarks,
-    };
+    // Total applied check
+    if (totalApplied > recv + 0.01) {
+      return alert(
+        `Total Applied (₹${totalApplied.toFixed(2)}) Amount Received (₹${recv.toFixed(2)}) se zyaada hai`
+      );
+    }
 
-    Object.keys(payload).forEach((k) => {
-      if (payload[k] === undefined || payload[k] === "") delete payload[k];
-    });
+    // Must have either invoice allocation OR pure advance
+    if (validAllocs.length === 0 && advanceAmount === 0) {
+      return alert("Kam se kam ek invoice select karo ya advance amount daalo");
+    }
 
     try {
       setSaving(true);
-      await paymentApi.create(payload);
-      alert("Payment recorded! Sale ka payment status update ho gaya.");
+      const errors = [];
+      let savedCount = 0;
+
+      // 1️⃣ Per-invoice payments
+      for (const a of validAllocs) {
+        try {
+          const payload = {
+            paymentDate: form.paymentDate,
+            customer: form.customer,
+            sale: a.saleId,
+            company: form.company,
+            paymentMode: form.paymentMode,
+            amountReceived: a.amount,
+          };
+          if (form.receivedBy)  payload.receivedBy = form.receivedBy;
+          if (form.referenceNo) payload.referenceNo = form.referenceNo;
+          if (form.remarks)     payload.remarks = form.remarks;
+
+          await paymentApi.create(payload);
+          savedCount++;
+        } catch (err) {
+          errors.push(`Invoice payment failed: ${err.message}`);
+        }
+      }
+
+      // 2️⃣ Advance payment (excess amount, no specific invoice)
+      if (advanceAmount > 0) {
+        try {
+          const advPayload = {
+            paymentDate: form.paymentDate,
+            customer: form.customer,
+            company: form.company,
+            paymentMode: form.paymentMode,
+            amountReceived: advanceAmount,
+            isAdvance: true,                                     // 🆕 backend flag
+            remarks: (form.remarks ? form.remarks + " — " : "") + "Advance Payment",
+          };
+          if (form.receivedBy)  advPayload.receivedBy = form.receivedBy;
+          if (form.referenceNo) advPayload.referenceNo = form.referenceNo;
+
+          await paymentApi.create(advPayload);
+          savedCount++;
+        } catch (err) {
+          errors.push(`Advance failed: ${err.message} (Backend me sale optional banao + isAdvance handle karo)`);
+        }
+      }
+
+      if (errors.length > 0) {
+        alert(`Saved ${savedCount} payment(s) with errors:\n${errors.join("\n")}`);
+      } else {
+        alert(
+          `${savedCount} payment(s) recorded` +
+          (advanceAmount > 0 ? ` (including ₹${advanceAmount.toFixed(2)} advance)` : "")
+        );
+      }
+
       setShowAdd(false);
+      setAllocations({});
       await loadData();
     } catch (err) {
       alert("Save failed: " + err.message);
@@ -423,7 +534,7 @@ export default function Payment() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan="11" className="payment-td--empty">Loading...</td></tr>
+                    <tr><td colSpan={isAdmin() ? 11 : 10} className="payment-td--empty">Loading...</td></tr>
                   ) : filteredPayments.length === 0 ? (
                     <tr><td colSpan="11" className="payment-td--empty">
                       {hasActiveFilters ? "No payments match these filters" : "No payments found"}
@@ -446,9 +557,18 @@ export default function Payment() {
                           <span className={`payment-badge payment-badge--${p.status?.toLowerCase()}`}>{p.status}</span>
                         </td>
                         <td className="payment-td--center">
-                          <button type="button" className="payment-icon-btn" title="Delete" onClick={() => handleDelete(p)}>
-                            <Icon.Trash />
-                          </button>
+                          {isAdmin() ? (
+                            <button
+                              type="button"
+                              className="payment-icon-btn"
+                              title="Delete"
+                              onClick={() => handleDelete(p)}
+                            >
+                              <Icon.Trash />
+                            </button>
+                          ) : (
+                            <span className="payment-muted" style={{ fontSize: 12 }}>—</span>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -473,7 +593,6 @@ export default function Payment() {
               ))}
             </div>
           </div>
-
           {/* Payment Mode Summary */}
           <div className="payment-card">
             <h3 className="payment-card__title">Payment Mode Summary</h3>
@@ -551,24 +670,14 @@ export default function Payment() {
             </div>
 
             <div className="payment-modal__body">
-              {/* Customer & Invoice */}
+              {/* 🆕 Customer & Multi-Invoice Allocation */}
               <section className="payment-modal__section">
-                <h3 className="payment-modal__section-title">Customer & Invoice</h3>
+                <h3 className="payment-modal__section-title">Customer & Invoices</h3>
                 <div className="payment-modal__grid">
                   <Field label="Customer" required>
                     <select className="payment-input" value={form.customer} onChange={(e) => handleCustomerChange(e.target.value)}>
                       <option value="">Select customer</option>
                       {masters.customers.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Sale / Invoice" required hint={form.customer ? `${customerSales.length} unpaid sales` : "Pehle customer select karo"}>
-                    <select className="payment-input" value={form.sale} onChange={(e) => setFm("sale", e.target.value)} disabled={!form.customer}>
-                      <option value="">Select invoice</option>
-                      {customerSales.map((s) => (
-                        <option key={s._id} value={s._id}>
-                          {s.invoiceNo} (₹{fmtINRCompact(s.balanceDue)} due)
-                        </option>
-                      ))}
                     </select>
                   </Field>
                   <Field label="Company" required>
@@ -577,21 +686,87 @@ export default function Payment() {
                       {masters.companies.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
                     </select>
                   </Field>
-
-                  {selectedSale && (
-                    <>
-                      <Field label="Total Invoice Amount">
-                        <input className="payment-input payment-input--readonly" readOnly value={fmtINR(selectedSale.netAmount)} />
-                      </Field>
-                      <Field label="Outstanding (Before)">
-                        <input className="payment-input payment-input--readonly" readOnly value={fmtINR(selectedSale.balanceDue)} />
-                      </Field>
-                      <Field label="Balance After Payment">
-                        <input className={`payment-input payment-input--readonly ${balanceAfter === 0 ? "payment-input--success" : ""}`} readOnly value={fmtINR(balanceAfter)} />
-                      </Field>
-                    </>
-                  )}
                 </div>
+
+                {/* 🆕 Multi-invoice allocation list */}
+                {form.customer && (
+                  <div className="payment-allocs">
+                    <div className="payment-allocs__head">
+                      <span>
+                        Unpaid Invoices ({customerSales.length})
+                        {customerSales.length > 0 && (
+                          <span className="payment-allocs__hint"> — checkbox se select karo, amount edit karo</span>
+                        )}
+                      </span>
+                      {customerSales.length > 0 && form.amountReceived && (
+                        <button type="button" className="payment-allocs__auto" onClick={autoAllocate}>
+                          ⚡ Auto-allocate FIFO
+                        </button>
+                      )}
+                    </div>
+
+                    {customerSales.length === 0 ? (
+                      <div className="payment-allocs__empty">
+                        ✅ All invoices paid! Pure advance payment possible.
+                      </div>
+                    ) : (
+                      <div className="payment-allocs__list">
+                        {customerSales.map((s) => {
+                          const isChecked = allocations[s._id] !== undefined;
+                          const amount = allocations[s._id] || "";
+                          return (
+                            <div
+                              className={`payment-alloc-row ${isChecked ? "payment-alloc-row--active" : ""}`}
+                              key={s._id}
+                            >
+                              <input
+                                type="checkbox"
+                                className="payment-alloc-check"
+                                checked={isChecked}
+                                onChange={(e) => toggleAllocation(s._id, e.target.checked, s.balanceDue)}
+                              />
+                              <div className="payment-alloc-info">
+                                <div className="payment-alloc-inv">{s.invoiceNo}</div>
+                                <div className="payment-alloc-meta">
+                                  <span>Due: <strong>₹{fmtINRCompact(s.balanceDue)}</strong></span>
+                                  <span>{formatDate(s.saleDate)}</span>
+                                </div>
+                              </div>
+                              <input
+                                type="number"
+                                className="payment-alloc-amt"
+                                placeholder="0"
+                                value={amount}
+                                disabled={!isChecked}
+                                onChange={(e) => setAllocAmount(s._id, e.target.value)}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Summary */}
+                    {(totalApplied > 0 || advanceAmount > 0 || form.amountReceived) && (
+                      <div className="payment-allocs__summary">
+                        <div className="payment-alloc-sum-row">
+                          <span>Total Applied (Invoices):</span>
+                          <strong>{fmtINR(totalApplied)}</strong>
+                        </div>
+                        <div className="payment-alloc-sum-row">
+                          <span>Amount Received:</span>
+                          <strong>{fmtINR(parseFloat(form.amountReceived) || 0)}</strong>
+                        </div>
+                        {advanceAmount > 0 && (
+                          <div className="payment-alloc-sum-row payment-alloc-sum-row--advance">
+                            <span>💰 Advance Amount:</span>
+                            <strong>{fmtINR(advanceAmount)}</strong>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </section>
 
               {/* Payment Information */}
@@ -610,8 +785,18 @@ export default function Payment() {
                   <Field label="Reference No." hint="UTR / Cheque / UPI Ref">
                     <input className="payment-input" placeholder="Enter reference" value={form.referenceNo} onChange={(e) => setFm("referenceNo", e.target.value)} />
                   </Field>
-                  <Field label="Amount Received" required hint={selectedSale ? `Max: ₹${fmtINRCompact(selectedSale.balanceDue)}` : null}>
-                    <input className="payment-input" type="number" placeholder="0" value={form.amountReceived} onChange={(e) => setFm("amountReceived", e.target.value)} />
+                  <Field
+                    label="Amount Received"
+                    required
+                    hint={advanceAmount > 0 ? `Advance: ₹${fmtINRCompact(advanceAmount)}` : "Total customer ne diya hai"}
+                  >
+                    <input
+                      className="payment-input"
+                      type="number"
+                      placeholder="0"
+                      value={form.amountReceived}
+                      onChange={(e) => setFm("amountReceived", e.target.value)}
+                    />
                   </Field>
                   <Field label="Received By">
                     <select className="payment-input" value={form.receivedBy} onChange={(e) => setFm("receivedBy", e.target.value)}>
@@ -899,6 +1084,104 @@ export default function Payment() {
         .payment-modal__grid {
           display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 14px;
+        }
+
+        /* 🆕 Multi-Invoice Allocation Section */
+        .payment-allocs {
+          margin-top: 14px;
+          background: #f8fafc;
+          border-radius: 10px;
+          padding: 14px;
+          border: 1px solid var(--pm-border);
+        }
+        .payment-allocs__head {
+          display: flex; justify-content: space-between; align-items: center;
+          margin-bottom: 12px;
+          font-size: 13px; font-weight: 600;
+        }
+        .payment-allocs__hint {
+          font-size: 11px; font-weight: 400; color: var(--pm-muted);
+        }
+        .payment-allocs__auto {
+          background: var(--pm-primary); color: #fff;
+          border: none; padding: 6px 12px; border-radius: 6px;
+          font-size: 12px; font-weight: 500; cursor: pointer;
+          font-family: inherit;
+        }
+        .payment-allocs__auto:hover { background: var(--pm-primary-hover); }
+        .payment-allocs__empty {
+          padding: 16px; text-align: center;
+          color: var(--pm-muted); font-size: 13px;
+          background: #fff; border-radius: 8px;
+        }
+        .payment-allocs__list {
+          display: flex; flex-direction: column; gap: 6px;
+          max-height: 260px; overflow-y: auto;
+          padding-right: 4px;
+        }
+        .payment-alloc-row {
+          display: grid;
+          grid-template-columns: auto 1fr 140px;
+          gap: 12px; align-items: center;
+          padding: 10px 12px; background: #fff;
+          border: 1px solid var(--pm-border);
+          border-radius: 8px;
+          transition: all 0.15s;
+        }
+        .payment-alloc-row--active {
+          border-color: var(--pm-primary);
+          background: #eff6ff;
+        }
+        .payment-alloc-check {
+          width: 16px; height: 16px; cursor: pointer;
+          accent-color: var(--pm-primary);
+        }
+        .payment-alloc-inv {
+          font-weight: 700; font-size: 13px;
+          font-family: ui-monospace, SFMono-Regular, monospace;
+          color: var(--pm-primary);
+        }
+        .payment-alloc-meta {
+          display: flex; gap: 12px;
+          font-size: 11px; color: var(--pm-muted);
+          margin-top: 3px;
+        }
+        .payment-alloc-meta strong { color: var(--pm-text); }
+        .payment-alloc-amt {
+          padding: 7px 10px;
+          border: 1px solid var(--pm-border);
+          border-radius: 6px;
+          font-size: 13px; text-align: right;
+          font-family: inherit;
+          font-weight: 600;
+        }
+        .payment-alloc-amt:focus {
+          outline: none; border-color: var(--pm-primary);
+          box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+        }
+        .payment-alloc-amt:disabled {
+          background: #f1f5f9; color: #cbd5e1;
+          cursor: not-allowed;
+        }
+        .payment-allocs__summary {
+          margin-top: 14px; padding-top: 12px;
+          border-top: 2px solid var(--pm-border);
+          display: flex; flex-direction: column; gap: 7px;
+        }
+        .payment-alloc-sum-row {
+          display: flex; justify-content: space-between;
+          font-size: 13px; color: var(--pm-text);
+        }
+        .payment-alloc-sum-row strong {
+          font-weight: 700;
+        }
+        .payment-alloc-sum-row--advance {
+          color: #d97706;
+          background: #fef3c7;
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-weight: 600;
+          margin-top: 4px;
         }
 
         @media (max-width: 1300px) {

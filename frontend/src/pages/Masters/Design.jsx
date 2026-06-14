@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {designApi} from "../../Api/design";
+import { isAdmin } from "../../utils/auth";
 // 👆 baad me designApi banao to swap kar dena
 
 /* ------------------------------------------------------------------
@@ -223,7 +224,8 @@ export default function DesignMaster() {
                       <div className="design-actions">
                         <button className="design-icon-action design-icon-action--view" title="View"><Icon.Eye /></button>
                         <button className="design-icon-action design-icon-action--edit" title="Edit" onClick={() => openEdit(d)}><Icon.Edit /></button>
-                        <button className="design-icon-action design-icon-action--delete" title="Delete" onClick={() => handleDelete(d._id)}><Icon.Trash /></button>
+                        <button className="design-icon-action design-icon-action--delete" title={isAdmin() ? "Delete":"Only admin can delete" } onClick={() => handleDelete(d._id)}
+                          disabled={!isAdmin()}><Icon.Trash /></button>
                       </div>
                     </td>
                   </tr>
@@ -428,7 +430,16 @@ export default function DesignMaster() {
         .design-icon-action--edit { background: #eff6ff; color: var(--dm-primary); }
         .design-icon-action--edit:hover { background: #dbeafe; }
         .design-icon-action--delete { background: #fee2e2; color: var(--dm-danger); }
-        .design-icon-action--delete:hover { background: #fecaca; }
+        .design-icon-action--delete:hover:not(:disabled) { background: #fecaca; }
+        .design-icon-action:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
+          background: #f1f5f9;
+          color: #94a3b8;
+        }
+        .design-icon-action:disabled:hover {
+          background: #f1f5f9;
+        }
 
         .design-pagination {
           padding: 12px 20px;
