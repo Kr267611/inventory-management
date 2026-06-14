@@ -91,8 +91,8 @@ export default function InwardEntry() {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [pcsDetails, setPcsDetails] = useState([]);
-  const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState({ meter: 0, color: "" });
+  // const [editingId, setEditingId] = useState(null);
+  // const [editDraft, setEditDraft] = useState({ meter: 0, color: "" });
 
   const [masters, setMasters] = useState({
     companies: [], locations: [], suppliers: [],
@@ -279,24 +279,24 @@ export default function InwardEntry() {
       .filter((p) => p.id !== id)
       .map((p, i) => ({ ...p, pcsNo: i + 1 }));
     setPcsDetails(filtered);
-    if (editingId === id) setEditingId(null);
+    // if (editingId === id) setEditingId(null);
   };
 
-  const startEdit = (row) => {
-    setEditingId(row.id);
-    setEditDraft({ meter: row.meter, color: row.color });
-  };
+  // const startEdit = (row) => {
+  //   setEditingId(row.id);
+  //   setEditDraft({ meter: row.meter, color: row.color });
+  // };
 
-  const saveEdit = (id) => {
-    setPcsDetails(
-      pcsDetails.map((p) =>
-        p.id === id
-          ? { ...p, meter: parseFloat(editDraft.meter) || 0, color: editDraft.color }
-          : p
-      )
-    );
-    setEditingId(null);
-  };
+  // const saveEdit = (id) => {
+  //   setPcsDetails(
+  //     pcsDetails.map((p) =>
+  //       p.id === id
+  //         ? { ...p, meter: parseFloat(editDraft.meter) || 0, color: editDraft.color }
+  //         : p
+  //     )
+  //   );
+  //   setEditingId(null);
+  // };
 
   const resetForm = () => {
     if (!window.confirm("Form aur PCS sab reset ho jaayega. Sure?")) return;
@@ -307,7 +307,7 @@ export default function InwardEntry() {
       location: masters.locations[0]?._id || "",
       uom: masters.uoms[0]?._id || "",
     });
-    setEditingId(null);
+    // setEditingId(null);
   };
 
   /* ──────── SAVE / UPDATE ──────── */
@@ -348,7 +348,7 @@ export default function InwardEntry() {
     // strip frontend-only fields
     delete payload.pcsCount;
     delete payload.totalMeterInput;
-    debugger;
+    // debugger;
 
     try {
       setSaving(true);
@@ -1049,18 +1049,18 @@ function Field({ label, required, children }) {
 }
 
 /* For static string options like Currency, Process Type */
-function Select({ value, onChange, options }) {
-  return (
-    <div className="inward-select-wrap">
-      <select className="inward-select" value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((opt) => (
-          <option key={opt} value={opt}>{opt || "Select..."}</option>
-        ))}
-      </select>
-      <span className="inward-select-wrap__chev"><Icon.ChevronDown /></span>
-    </div>
-  );
-}
+// function Select({ value, onChange, options }) {
+//   return (
+//     <div className="inward-select-wrap">
+//       <select className="inward-select" value={value} onChange={(e) => onChange(e.target.value)}>
+//         {options.map((opt) => (
+//           <option key={opt} value={opt}>{opt || "Select..."}</option>
+//         ))}
+//       </select>
+//       <span className="inward-select-wrap__chev"><Icon.ChevronDown /></span>
+//     </div>
+//   );
+// }
 
 /* For master data objects with _id + name */
 function MasterSelect({ value, onChange, options = [], labelKey = "name" }) {
@@ -1077,11 +1077,11 @@ function MasterSelect({ value, onChange, options = [], labelKey = "name" }) {
   );
 }
 
-function SummaryBox({ label, value }) {
-  return (
-    <div className="inward-summary-box">
-      <div className="inward-summary-box__label">{label}</div>
-      <div className="inward-summary-box__value">{value}</div>
-    </div>
-  );
-}
+// function SummaryBox({ label, value }) {
+//   return (
+//     <div className="inward-summary-box">
+//       <div className="inward-summary-box__label">{label}</div>
+//       <div className="inward-summary-box__value">{value}</div>
+//     </div>
+//   );
+// }
