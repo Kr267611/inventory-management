@@ -13,8 +13,8 @@
 }
 .navbar svg { width: 18px; height: 18px; display: block; }
 
-.navbar-left  { display: flex; align-items: center; gap: 12px; }
-.navbar-right { display: flex; align-items: center; gap: 8px; }
+.navbar-left  { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.navbar-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 /* MENU BUTTON */
 .menu-btn {
@@ -29,6 +29,7 @@
   justify-content: center;
   color: #475569;
   transition: all 0.15s;
+  flex-shrink: 0;
 }
 .menu-btn:hover { background: #f1f5f9; color: #0f172a; }
 
@@ -46,6 +47,7 @@
   justify-content: center;
   color: #475569;
   transition: all 0.15s;
+  flex-shrink: 0;
 }
 .navbar-icon-btn:hover { background: #f1f5f9; color: #0f172a; }
 
@@ -69,10 +71,11 @@
   line-height: 1;
 }
 
-/* WRAP */
+/* WRAP — for positioning dropdown */
 .navbar-notif-wrap,
 .navbar-profile-wrap {
   position: relative;
+  flex-shrink: 0;
 }
 
 /* PROFILE BUTTON */
@@ -87,6 +90,7 @@
   cursor: pointer;
   transition: all 0.15s;
   font-family: inherit;
+  max-width: 200px;
 }
 .navbar-profile:hover { background: #f8fafc; }
 
@@ -114,11 +118,16 @@
   flex-direction: column;
   text-align: left;
   line-height: 1.2;
+  min-width: 0;
 }
 .navbar-user__name {
   font-size: 14px;
   font-weight: 600;
   color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
 }
 .navbar-user__role {
   font-size: 10px;
@@ -135,10 +144,13 @@
   display: flex;
   align-items: center;
   transition: transform 0.2s;
+  flex-shrink: 0;
 }
 .navbar-chevron.open { transform: rotate(180deg); }
 
-/* DROPDOWN BASE */
+/* ════════════════════════════════════
+   DROPDOWN — Fully responsive
+   ════════════════════════════════════ */
 .navbar-dropdown {
   position: absolute;
   top: calc(100% + 8px);
@@ -147,7 +159,7 @@
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
-  z-index: 100;
+  z-index: 1000;
   animation: navDropIn 0.18s ease;
   overflow: hidden;
 }
@@ -156,7 +168,8 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.navbar-dropdown--notif   { width: 380px; max-width: 90vw; }
+/* Sizes */
+.navbar-dropdown--notif   { width: 380px; }
 .navbar-dropdown--profile { width: 280px; }
 
 .navbar-dropdown__header {
@@ -322,11 +335,70 @@
   margin-top: 2px;
 }
 
-/* RESPONSIVE */
-@media (max-width: 640px) {
+/* ════════════════════════════════════════
+   RESPONSIVE BREAKPOINTS — Fixed properly
+   ════════════════════════════════════════ */
+
+/* Tablet — 1024px and below */
+@media (max-width: 1024px) {
+  .navbar-dropdown--notif { width: 360px; }
+}
+
+/* Tablet — 768px and below */
+@media (max-width: 768px) {
   .navbar { padding: 0 16px; }
+  
+  /* Notification dropdown — fixed position, near full screen */
+  .navbar-dropdown--notif {
+    position: fixed;
+    top: 72px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 90px);
+  }
+  
+  .navbar-dropdown--profile {
+    position: fixed;
+    top: 72px;
+    right: 8px;
+    width: 260px;
+  }
+  
+  .navbar-notif-list {
+    max-height: calc(100vh - 200px);
+  }
+}
+
+/* Mobile — 640px and below */
+@media (max-width: 640px) {
+  .navbar { padding: 0 12px; }
+  
+  /* Hide name + chevron, keep avatar only */
   .navbar-user { display: none; }
   .navbar-chevron { display: none; }
   .navbar-profile { padding: 4px; }
-  .navbar-dropdown--notif { width: 320px; right: -8px; }
+  
+  /* Profile dropdown — also full width */
+  .navbar-dropdown--profile {
+    position: fixed;
+    top: 72px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-width: 320px;
+    margin-left: auto;
+  }
+  
+  /* Smaller padding inside dropdowns */
+  .navbar-notif-item { padding: 10px 12px; }
+  .navbar-dropdown__header { padding: 12px 14px; }
+}
+
+/* Very small — 380px and below */
+@media (max-width: 380px) {
+  .navbar { padding: 0 10px; gap: 4px; }
+  .navbar-right { gap: 4px; }
+  .navbar-avatar { width: 32px; height: 32px; font-size: 13px; }
 }
