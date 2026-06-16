@@ -390,7 +390,7 @@ export default function InwardEntry() {
           </div>
         </div>
         <div className="inward-page__actions">
-          <button className="inward-btn inward-btn--ghost" onClick={() => navigate("/dashboard/inward")}>
+          <button className="inward-btn inward-btn--ghost" onClick={() => navigate("/dashboard/reports/inward-report")}>
             <Icon.ArrowLeft /><span>Back to List</span>
           </button>
           <button className="inward-btn inward-btn--ghost" onClick={resetForm}>
