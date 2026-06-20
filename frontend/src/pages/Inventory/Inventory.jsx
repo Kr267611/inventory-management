@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { inventoryApi } from "../../Api/inventoryApi";
 import { fetchAllMasters } from "../../Api/masterApi";
 
@@ -6,6 +7,11 @@ import { fetchAllMasters } from "../../Api/masterApi";
    ICONS
    ================================================================ */
 const Icon = {
+   ArrowLeft: () => (                                                              // 🆕
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+    </svg>
+  ),
   Book: () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -87,6 +93,7 @@ const cleanFilters = (f) => {
    MAIN
    ================================================================ */
 const Inventory = () => {
+  const navigate= useNavigate();
   const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   const [inventory, setInventory] = useState([]);
@@ -203,6 +210,9 @@ const Inventory = () => {
           </div>
         </div>
         <div className="inv-page__actions">
+           <button className="inv-btn inv-btn--ghost" onClick={() => navigate(-1)}>     {/* 🆕 */}
+    <Icon.ArrowLeft /><span>Back</span>
+  </button>
           <button className="inv-btn inv-btn--ghost" onClick={() => alert("Stock Ledger (coming soon)")}>
             <Icon.Book /><span>Stock Ledger</span>
           </button>

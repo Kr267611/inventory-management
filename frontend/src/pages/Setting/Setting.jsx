@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { userApi } from "../../Api/userApi";
 
 /* ICONS */
 const Icon = {
+  ArrowLeft: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>,
   Users: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
   Shield: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
   UserCheck: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><polyline points="17 11 19 13 23 9" /></svg>,
@@ -21,6 +23,7 @@ const formatDate = (iso) => {
 };
 
 export default function Setting() {
+  const navigate= useNavigate();
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -142,9 +145,14 @@ export default function Setting() {
             <span className="setg-current">Settings</span>
           </div>
         </div>
-        <button className="setg-btn setg-btn--ghost" onClick={load}>
-          <Icon.Refresh /><span>Refresh</span>
-        </button>
+      <div className="setg-actions">                                                        {/* 🆕 */}
+  <button className="setg-btn setg-btn--ghost" onClick={() => navigate(-1)}>         {/* 🆕 */}
+    <Icon.ArrowLeft /><span>Back</span>
+  </button>
+  <button className="setg-btn setg-btn--ghost" onClick={load}>
+    <Icon.Refresh /><span>Refresh</span>
+  </button>
+</div>
       </div>
 
       {/* STATS */}
@@ -321,6 +329,11 @@ const settingsCSS = `
 .setg-btn--ghost:hover:not(:disabled) { background: #f8fafc; }
 .setg-btn--primary { background: var(--setg-primary); color: #fff; border-color: var(--setg-primary); }
 .setg-btn--primary:hover:not(:disabled) { background: var(--setg-primary-hover); }
+.setg-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 .setg-stats {
   display: grid; grid-template-columns: repeat(4, 1fr);

@@ -412,7 +412,7 @@ export default function Sales() {
           </div>
         </div>
         <div className="sales-page__actions">
-          <button className="sales-btn sales-btn--ghost" onClick={() => navigate("/dashboard/sales")}>
+          <button className="sales-btn sales-btn--ghost" onClick={() => navigate("/dashboard/reports/sales-report")}>
             <Icon.ArrowLeft /><span>Back to List</span>
           </button>
           <button className="sales-btn sales-btn--ghost" onClick={handleReset}>

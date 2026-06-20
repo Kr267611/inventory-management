@@ -8,6 +8,7 @@ import {
   FaFileAlt,
   FaCheckCircle,
   FaCalendarAlt,
+  FaArrowLeft,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
@@ -88,12 +89,19 @@ function ReportMaster() {
     <div className="report-page">
       {/* Header */}
       <div className="report-page__header">
+          <div>
         <h1 className="report-page__title">Reports</h1>
         <div className="report-breadcrumb">
           <span>Home</span>
           <span className="report-breadcrumb__sep">/</span>
           <span className="report-breadcrumb__current">Reports</span>
         </div>
+        </div>
+        {/* </div> */}
+         <button className="report-back-btn" onClick={() => navigate(-1)}>      {/* 🆕 */}
+    <FaArrowLeft />
+    <span>Back</span>
+  </button>
       </div>
 
       {/* Report Cards */}
@@ -176,13 +184,42 @@ function ReportMaster() {
         }
 
         /* HEADER */
-        .report-page__header { margin-bottom: 24px; }
+        .report-page__header {
+  margin-bottom: 24px;
+  display: flex;                          /* 🆕 */
+  align-items: flex-start;                /* 🆕 */
+  justify-content: space-between;         /* 🆕 */
+  gap: 16px;                              /* 🆕 */
+  flex-wrap: wrap;                        /* 🆕 mobile pe wrap ho */
+}
         .report-page__title {
           margin: 0;
           font-size: 24px;
           font-weight: 700;
           color: #0f172a;
         }
+         .report-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.report-back-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+.report-back-btn svg {
+  font-size: 14px;
+} 
         .report-breadcrumb {
           margin-top: 6px;
           display: flex;

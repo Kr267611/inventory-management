@@ -66,6 +66,16 @@ const Icon = {
       <line x1="7" y1="7" x2="7.01" y2="7" />
     </svg>
   ),
+  Search: () => (                                                                  // 🆕
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  ),
+  X: () => (                                                                       // 🆕
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  ),
 };
 
 const EMPTY_FORM = {
@@ -91,8 +101,9 @@ export default function InwardEntry() {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [pcsDetails, setPcsDetails] = useState([]);
-  // const [editingId, setEditingId] = useState(null);
-  // const [editDraft, setEditDraft] = useState({ meter: 0, color: "" });
+  const [recentInwards, setRecentInwards] = useState([]);     // 🆕
+  const [totalInwards, setTotalInwards] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [masters, setMasters] = useState({
     companies: [], locations: [], suppliers: [],
@@ -108,6 +119,12 @@ export default function InwardEntry() {
         setLoading(true);
         const m = await fetchAllMasters();
         setMasters(m);
+
+        const list = await inwardApi.getAll().catch(() => []);
+        const sorted = (list || [])
+          .sort((a, b) => new Date(b.entryDate) - new Date(a.entryDate))
+        setRecentInwards(sorted);
+        setTotalInwards((list || []).length);
 
         // Default selections — pehla option auto-select
         setForm((f) => ({
@@ -162,6 +179,20 @@ export default function InwardEntry() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId]);
 
+  /* ──────── 🆕 FILTERED RECENT INWARDS ──────── */
+  const displayedInwards = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return recentInwards.slice(0, 10);   // default: last 10
+    }
+    const q = searchQuery.toLowerCase().trim();
+    return recentInwards.filter((inw) =>
+      (inw.baleNo || "").toLowerCase().includes(q) ||
+      (inw.fabric?.name || "").toLowerCase().includes(q) ||
+      (inw.fabricQuality?.name || "").toLowerCase().includes(q) ||
+      (inw.voucherNo || "").toLowerCase().includes(q) ||
+      (inw.design?.designNo || "").toLowerCase().includes(q)
+    );
+  }, [recentInwards, searchQuery]);
   /* ──────── SUMMARY ──────── */
   const summary = useMemo(() => {
     const totalPcs = pcsDetails.length;
@@ -406,6 +437,120 @@ export default function InwardEntry() {
       {/* Content grid */}
       {/* Content — Single column layout */}
       <div className="inward-content-v2">
+
+        {/* ════════════════════════════════
+            🆕 Recent Inward - Auto Hide when user types
+            ════════════════════════════════ */}
+        {!editId && !form.baleNo && pcsDetails.length === 0 && recentInwards.length > 0 && (
+          <section className="inward-card inward-recent-card">
+            <div className="inward-recent-header">
+              <div>
+                <h2 className="inward-card__title inward-card__title--inline">
+                  Recent Inwards <span className="inward-recent-count">
+                    ({searchQuery ? `${displayedInwards.length} found` : `${totalInwards} total`})
+                  </span>
+                </h2>
+                <div className="inward-pcs-hint">
+                  <Icon.Info />
+                  <span>Form fill karte hi yeh table hide ho jayega · Search by Bale No, Fabric, Quality</span>
+                </div>
+              </div>
+              <div className="inward-recent-actions">                                       {/* 🆕 */}
+                {/* 🆕 Search Box */}
+                <div className="inward-search-wrap">
+                  <span className="inward-search-icon"><Icon.Search /></span>
+                  <input
+                    type="text"
+                    className="inward-search-input"
+                    placeholder="Search Bale No, Fabric..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button
+                      className="inward-search-clear"
+                      onClick={() => setSearchQuery("")}
+                      title="Clear search"
+                    >
+                      <Icon.X />
+                    </button>
+                  )}
+                </div>
+                <button
+                  className="inward-btn inward-btn--ghost inward-btn--sm"
+                  onClick={() => navigate("/dashboard/reports/inward-report")}
+                >
+                  <span>View All</span>
+                </button>
+              </div>
+            </div>
+            <div className="inward-table-wrap">
+              <table className="inward-table">
+                <thead>
+                  <tr>
+                    <th className="inward-th">Date</th>
+                    <th className="inward-th">Bale No</th>
+                    <th className="inward-th">Fabric</th>
+                    <th className="inward-th">Quality</th>
+                    <th className="inward-th inward-th--center">Pcs</th>
+                    <th className="inward-th inward-th--center">Meter</th>
+                    <th className="inward-th inward-th--center">Rate (₹)</th>
+                    <th className="inward-th inward-th--center">Total (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedInwards.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="inward-td inward-td--empty">
+                        {searchQuery ? `🔍 "${searchQuery}" — koi match nahi mila` : "Koi inward nahi"}
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedInwards.map((inw) => {
+                      const totalMeter = (inw.pcsDetails || []).reduce(
+                        (s, p) => s + (parseFloat(p.meter) || 0), 0
+                      );
+                      const totalAmount = totalMeter * (parseFloat(inw.rate) || 0);
+                      return (
+                        <tr
+                          key={inw._id}
+                          className="inward-tr inward-tr--clickable"
+                          onClick={() => navigate(`/dashboard/inward/${inw._id}`)}
+                          title="Click to edit"
+                        >
+                          <td className="inward-td">
+                            {inw.entryDate
+                              ? new Date(inw.entryDate).toLocaleDateString("en-GB")
+                              : "—"}
+                          </td>
+                          <td className="inward-td">
+                            <strong className="inward-recent-bale">{inw.baleNo || "—"}</strong>
+                          </td>
+                          <td className="inward-td">{inw.fabric?.name || "—"}</td>
+                          <td className="inward-td">{inw.fabricQuality?.name || "—"}</td>
+                          <td className="inward-td inward-td--center">
+                            {(inw.pcsDetails || []).length}
+                          </td>
+                          <td className="inward-td inward-td--center">
+                            {totalMeter.toFixed(2)}
+                          </td>
+                          <td className="inward-td inward-td--center">
+                            {(parseFloat(inw.rate) || 0).toFixed(2)}
+                          </td>
+                          <td className="inward-td inward-td--center">
+                            <strong className="inward-recent-total">
+                              {totalAmount.toFixed(2)}
+                            </strong>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {/* ════════════════════════════════
             🆕 TOP STRIP — Date + Bale No
@@ -783,6 +928,90 @@ export default function InwardEntry() {
           border-left: 4px solid #8b5cf6;
           background: #faf5ff;
         }
+        
+        .inward-recent-card {
+  border-left: 4px solid #0891b2;
+  background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%);
+}
+.inward-recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.inward-recent-count {
+  color: var(--inw-muted);
+  font-weight: 500;
+  font-size: 14px;
+  margin-left: 6px;
+}
+.inward-tr--clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.inward-tr--clickable:hover {
+  background: #ecfeff !important;
+}
+.inward-recent-bale {
+  color: var(--inw-primary);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.inward-recent-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.inward-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.inward-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--inw-muted);
+  pointer-events: none;
+  display: flex;
+}
+.inward-search-icon svg { width: 14px; height: 14px; }
+.inward-search-input {
+  padding: 8px 32px 8px 32px;
+  border: 1px solid var(--inw-border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  width: 220px;
+  transition: all 0.15s;
+}
+.inward-search-input:focus {
+  outline: none;
+  border-color: var(--inw-primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+  width: 260px;
+}
+.inward-search-input::placeholder { color: #94a3b8; }
+.inward-search-clear {
+  position: absolute;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--inw-text);
+}
+.inward-search-clear:hover { background: #cbd5e1; }
+.inward-search-clear svg { width: 11px; height: 11px; }
+
 
         /* 🆕 Highlight input (Pcs count, Rate INR) */
         .inward-input--highlight {

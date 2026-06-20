@@ -6,6 +6,11 @@ import { useNavigate } from "react-router-dom";
    INLINE ICONS
    ------------------------------------------------------------------ */
 const Icon = {
+  ArrowLeft: () => (                                                              // 🆕
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+    </svg>
+  ),
   Plus: () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -135,10 +140,10 @@ const MASTERS = [
 ];
 
 const STATS = [
-  { key: "total",    label: "Total Masters",    value: 13,     hint: "All master records",  icon: <Icon.Users />,       color: "blue"   },
-  { key: "active",   label: "Active Masters",   value: 13,     hint: "Active records",      icon: <Icon.CheckCircle />, color: "green"  },
-  { key: "inactive", label: "Inactive Masters", value: 0,      hint: "Inactive records",    icon: <Icon.Trash />,        color: "red"    },
-  { key: "updated",  label: "Last Updated",     value: "Today", hint: "Recently updated",    icon: <Icon.Clock />,        color: "purple" },
+  { key: "total", label: "Total Masters", value: 13, hint: "All master records", icon: <Icon.Users />, color: "blue" },
+  { key: "active", label: "Active Masters", value: 13, hint: "Active records", icon: <Icon.CheckCircle />, color: "green" },
+  { key: "inactive", label: "Inactive Masters", value: 0, hint: "Inactive records", icon: <Icon.Trash />, color: "red" },
+  { key: "updated", label: "Last Updated", value: "Today", hint: "Recently updated", icon: <Icon.Clock />, color: "purple" },
 ];
 
 /* ------------------------------------------------------------------
@@ -152,31 +157,31 @@ export default function Masters({ onView, onAddNew }) {
     else navigate(`/dashboard/masters/${key}`);
   };
 
-useEffect(() => {
-  const loadCounts = async () => {
-    try {
-      const data = await fetchAllMasters();
-      setCounts({
-        company: data.companies?.length || 0,
-        location: data.locations?.length || 0,
-        supplier: data.suppliers?.length || 0,
-        customer: data.customers?.length || 0,
-        fabric: data.fabrics?.length || 0,
-        quality: data.qualities?.length || 0,
-        design: data.designs?.length || 0,
-        color: data.colors?.length || 0,
-        uom: data.uoms?.length || 0,
-        transport: data.transports?.length || 0,
-        salesPerson: data.salespersons?.length || 0,
-        paymentmode: data.paymentModes?.length || 0,
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  useEffect(() => {
+    const loadCounts = async () => {
+      try {
+        const data = await fetchAllMasters();
+        setCounts({
+          company: data.companies?.length || 0,
+          location: data.locations?.length || 0,
+          supplier: data.suppliers?.length || 0,
+          customer: data.customers?.length || 0,
+          fabric: data.fabrics?.length || 0,
+          quality: data.qualities?.length || 0,
+          design: data.designs?.length || 0,
+          color: data.colors?.length || 0,
+          uom: data.uoms?.length || 0,
+          transport: data.transports?.length || 0,
+          salesPerson: data.salespersons?.length || 0,
+          paymentmode: data.paymentModes?.length || 0,
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-  loadCounts();
-}, []);
+    loadCounts();
+  }, []);
 
   return (
     <div className="master-page">
@@ -190,9 +195,14 @@ useEffect(() => {
             <span className="master-breadcrumb__current">Masters</span>
           </div>
         </div>
-        <button className="master-btn master-btn--primary" onClick={onAddNew} disabled>
-          <Icon.Plus /><span>Add New Master</span><Icon.ChevronDown />
-        </button>
+        <div className="master-page__actions">                              {/* 🆕 wrapper */}
+          <button className="master-btn master-btn--ghost" onClick={() => navigate(-1)}>     {/* 🆕 */}
+            <Icon.ArrowLeft /><span>Back</span>
+          </button>
+          <button className="master-btn master-btn--primary" onClick={onAddNew} disabled>
+            <Icon.Plus /><span>Add New Master</span><Icon.ChevronDown />
+          </button>
+        </div>
       </div>
 
       {/* Masters grid */}
@@ -206,9 +216,9 @@ useEffect(() => {
                 <div className="master-card__subtitle">{m.subtitle}</div>
               </div>
             </div>
-          <div className="master-card__count">
-  {counts[m.key] ?? 0}
-</div>
+            <div className="master-card__count">
+              {counts[m.key] ?? 0}
+            </div>
             <div className="master-card__count-label">{m.countLabel}</div>
             <button className="master-card__btn" onClick={() => handleView(m.key)}>
               View {m.title === "UOM" ? "UOMs" : m.title === "Customer" ? "Customers" : m.title === "Company" ? "Companies" : m.title + "s"}
@@ -285,6 +295,24 @@ useEffect(() => {
         .master-btn--primary { background: var(--m-primary); color: #fff; border-color: var(--m-primary); }
         .master-btn--primary:hover { background: var(--m-primary-hover); }
         .master-btn--primary svg { width: 16px; height: 16px; }
+
+        /* 🆕 Ghost button + actions wrapper */
+.master-btn--ghost {
+  background: #fff;
+  color: var(--m-text);
+  border-color: var(--m-border);
+}
+.master-btn--ghost:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+.master-btn--ghost svg { width: 16px; height: 16px; }
+
+.master-page__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
         /* Master grid */
         .master-grid {

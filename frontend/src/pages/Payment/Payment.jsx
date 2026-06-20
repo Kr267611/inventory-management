@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { paymentApi } from "../../Api/paymentApi";
 import { salesApi } from "../../Api/sales";
 import { fetchAllMasters } from "../../Api/masterApi";
@@ -8,6 +9,7 @@ import { isAdmin } from "../../utils/auth";
    ICONS
    ================================================================ */
 const Icon = {
+  ArrowLeft: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>,
   Plus: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
   Search: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>,
   Refresh: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>,
@@ -52,6 +54,7 @@ const EMPTY_FILTERS = {
    MAIN
    ================================================================ */
 export default function Payment() {
+  const navigate = useNavigate();
   const [payments, setPayments] = useState([]);
   const [sales, setSales] = useState([]);
   const [stats, setStats] = useState({ totalReceived: 0, monthCollection: 0, totalInvoices: 0, totalOutstanding: 0 });
@@ -86,8 +89,8 @@ export default function Payment() {
       setStats(statsData);
       setSales(salesData);
       setMasters({
-        customers:    mastersData.customers || [],
-        companies:    mastersData.companies || [],
+        customers: mastersData.customers || [],
+        companies: mastersData.companies || [],
         paymentModes: mastersData.paymentModes || [],
         salesPersons: mastersData.salesPersons || [],
       });
@@ -167,8 +170,8 @@ export default function Payment() {
   const filteredPayments = useMemo(() => {
     let list = [...payments];
     if (appliedFilters.customer) list = list.filter((p) => (p.customer?._id || p.customer) === appliedFilters.customer);
-    if (appliedFilters.company)  list = list.filter((p) => (p.company?._id  || p.company)  === appliedFilters.company);
-    if (appliedFilters.mode)     list = list.filter((p) => (p.paymentMode?._id || p.paymentMode) === appliedFilters.mode);
+    if (appliedFilters.company) list = list.filter((p) => (p.company?._id || p.company) === appliedFilters.company);
+    if (appliedFilters.mode) list = list.filter((p) => (p.paymentMode?._id || p.paymentMode) === appliedFilters.mode);
     if (appliedFilters.status && appliedFilters.status !== "All Status") list = list.filter((p) => p.status === appliedFilters.status);
     if (appliedFilters.invoiceSearch) {
       const q = appliedFilters.invoiceSearch.toLowerCase();
@@ -179,7 +182,7 @@ export default function Payment() {
       list = list.filter((p) => (p.referenceNo || "").toLowerCase().includes(q));
     }
     if (appliedFilters.fromDate) list = list.filter((p) => new Date(p.paymentDate) >= new Date(appliedFilters.fromDate));
-    if (appliedFilters.toDate)   list = list.filter((p) => new Date(p.paymentDate) <= new Date(appliedFilters.toDate));
+    if (appliedFilters.toDate) list = list.filter((p) => new Date(p.paymentDate) <= new Date(appliedFilters.toDate));
     return list;
   }, [payments, appliedFilters]);
 
@@ -240,18 +243,18 @@ export default function Payment() {
 
   /* ──────── OVERVIEW ──────── */
   const overview = useMemo(() => ([
-    { label: "Total Invoices",    value: stats.totalInvoices,    color: "default" },
-    { label: "Total Received",    value: stats.totalReceived,    color: "green"   },
-    { label: "Total Outstanding", value: stats.totalOutstanding, color: "orange"  },
-    { label: "Overdue Amount",    value: recentOverdue.reduce((s, o) => s + o.amount, 0), color: "red" },
+    { label: "Total Invoices", value: stats.totalInvoices, color: "default" },
+    { label: "Total Received", value: stats.totalReceived, color: "green" },
+    { label: "Total Outstanding", value: stats.totalOutstanding, color: "orange" },
+    { label: "Overdue Amount", value: recentOverdue.reduce((s, o) => s + o.amount, 0), color: "red" },
   ]), [stats, recentOverdue]);
 
   /* ──────── STAT CARDS ──────── */
   const STAT_CARDS = [
-    { label: "Total Collection (This Month)", value: stats.monthCollection,   icon: "wallet", color: "blue"   },
-    { label: "Total Received",                value: stats.totalReceived,     icon: "bag",    color: "green"  },
-    { label: "Total Outstanding",             value: stats.totalOutstanding,  icon: "clock",  color: "orange" },
-    { label: "Overdue Amount",                value: overview[3].value,       icon: "alert",  color: "purple" },
+    { label: "Total Collection (This Month)", value: stats.monthCollection, icon: "wallet", color: "blue" },
+    { label: "Total Received", value: stats.totalReceived, icon: "bag", color: "green" },
+    { label: "Total Outstanding", value: stats.totalOutstanding, icon: "clock", color: "orange" },
+    { label: "Overdue Amount", value: overview[3].value, icon: "alert", color: "purple" },
   ];
 
   /* ──────── FILTER HANDLERS ──────── */
@@ -279,8 +282,8 @@ export default function Payment() {
 
   const handleSave = async () => {
     // Basic validation
-    if (!form.customer)    return alert("Customer select karo");
-    if (!form.company)     return alert("Company select karo");
+    if (!form.customer) return alert("Customer select karo");
+    if (!form.company) return alert("Company select karo");
     if (!form.paymentMode) return alert("Payment Mode select karo");
 
     const recv = parseFloat(form.amountReceived) || 0;
@@ -329,9 +332,9 @@ export default function Payment() {
             paymentMode: form.paymentMode,
             amountReceived: a.amount,
           };
-          if (form.receivedBy)  payload.receivedBy = form.receivedBy;
+          if (form.receivedBy) payload.receivedBy = form.receivedBy;
           if (form.referenceNo) payload.referenceNo = form.referenceNo;
-          if (form.remarks)     payload.remarks = form.remarks;
+          if (form.remarks) payload.remarks = form.remarks;
 
           await paymentApi.create(payload);
           savedCount++;
@@ -352,7 +355,7 @@ export default function Payment() {
             isAdvance: true,                                     // 🆕 backend flag
             remarks: (form.remarks ? form.remarks + " — " : "") + "Advance Payment",
           };
-          if (form.receivedBy)  advPayload.receivedBy = form.receivedBy;
+          if (form.receivedBy) advPayload.receivedBy = form.receivedBy;
           if (form.referenceNo) advPayload.referenceNo = form.referenceNo;
 
           await paymentApi.create(advPayload);
@@ -404,6 +407,9 @@ export default function Payment() {
           </div>
         </div>
         <div className="payment-page__actions">
+          <button className="payment-btn payment-btn--ghost" onClick={() => navigate(-1)}>     {/* 🆕 */}
+            <Icon.ArrowLeft /><span>Back</span>
+          </button>
           <button className="payment-btn payment-btn--primary" onClick={openAdd}>
             <Icon.Plus /><span>Add Payment</span>
           </button>
@@ -680,12 +686,12 @@ export default function Payment() {
                       {masters.customers.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
                     </select>
                   </Field>
-                  <Field label="Company" required>
+                  {/* <Field label="Company" required>
                     <select className="payment-input" value={form.company} onChange={(e) => setFm("company", e.target.value)}>
                       <option value="">Select company</option>
                       {masters.companies.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
                     </select>
-                  </Field>
+                  </Field> */}
                 </div>
 
                 {/* 🆕 Multi-invoice allocation list */}
@@ -798,12 +804,12 @@ export default function Payment() {
                       onChange={(e) => setFm("amountReceived", e.target.value)}
                     />
                   </Field>
-                  <Field label="Received By">
+                  {/* <Field label="Received By">
                     <select className="payment-input" value={form.receivedBy} onChange={(e) => setFm("receivedBy", e.target.value)}>
                       <option value="">Select person</option>
                       {masters.salesPersons.map((sp) => <option key={sp._id} value={sp._id}>{sp.name}</option>)}
                     </select>
-                  </Field>
+                  </Field> */}
                   <Field label="Remarks" full>
                     <textarea className="payment-input payment-input--textarea" rows="2" placeholder="Payment received via..." value={form.remarks} onChange={(e) => setFm("remarks", e.target.value)} />
                   </Field>
