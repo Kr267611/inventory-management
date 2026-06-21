@@ -24,7 +24,32 @@ const Icon = {
 
 const PAYMENT_TYPES = ["Credit", "Cash", "Advance"];
 
+
+// const fmt = (n) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmt = (n) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// 🆕 Generate auto invoice number — INV-YYYYMMDD-NNN
+const generateInvoiceNo = async (saleDate) => {
+  const date = new Date(saleDate);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const prefix = `INV-${yyyy}${mm}${dd}-`;
+
+  try {
+    const allSales = await salesApi.getAll();
+    let maxSeq = 0;
+    (allSales || []).forEach((s) => {
+      if (s.invoiceNo?.startsWith(prefix)) {
+        const seq = parseInt(s.invoiceNo.slice(prefix.length), 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+    });
+    return `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
+  } catch {
+    return `${prefix}001`;
+  }
+};
 
 const EMPTY_FORM = {
   saleDate: new Date().toISOString().slice(0, 10),
@@ -43,13 +68,11 @@ const EMPTY_FORM = {
 };
 
 const EMPTY_ITEM = {
-  baleNo: "",                  // 🆕 primary lookup
+  baleNo: "",
   fabric: "",
   fabricQuality: "",
   color: "",
   location: "",
-  pcs: "",
-  meterPerPcs: "",
   rate: "",
   discount: "0",
 };
@@ -65,7 +88,10 @@ export default function Sales() {
   const [itemForm, setItemForm] = useState(EMPTY_ITEM);
   const [items, setItems] = useState([]);
   const [editingId, setEditingId] = useState(null);
-
+  const [salePcsRows, setSalePcsRows] = useState([]);
+  const [recentSales, setRecentSales] = useState([]);        // 🆕
+  const [totalSales, setTotalSales] = useState(0);            // 🆕
+  const [searchQuery, setSearchQuery] = useState("");
   const [masters, setMasters] = useState({
     customers: [], companies: [], locations: [], fabrics: [],
     qualities: [], colors: [], salesPersons: [], transports: [],
@@ -89,22 +115,34 @@ export default function Sales() {
         setLoading(true);
         const m = await fetchAllMasters();
         setMasters({
-          customers:    m.customers || [],
-          companies:    m.companies || [],
-          locations:    m.locations || [],
-          fabrics:      m.fabrics || [],
-          qualities:    m.qualities || [],
-          colors:       m.colors || [],
+          customers: m.customers || [],
+          companies: m.companies || [],
+          locations: m.locations || [],
+          fabrics: m.fabrics || [],
+          qualities: m.qualities || [],
+          colors: m.colors || [],
           salesPersons: m.salespersons || m.salesPersons || [],
-          transports:   m.transports || [],
+          transports: m.transports || [],
           paymentModes: m.paymentModes || [],
         });
 
         setForm((f) => ({
           ...f,
-          company:  f.company  || m.companies?.[0]?._id || "",
+          company: f.company || m.companies?.[0]?._id || "",
           location: f.location || m.locations?.[0]?._id || "",
         }));
+
+        if (!editId) {
+          const newInvoice = await generateInvoiceNo(new Date().toISOString().slice(0, 10));
+          setForm((f) => ({ ...f, invoiceNo: newInvoice }));
+        }
+
+        // 🆕 Fetch recent sales for the bottom table
+        const allSales = await salesApi.getAll().catch(() => []);
+        const sorted = (allSales || [])
+          .sort((a, b) => new Date(b.saleDate) - new Date(a.saleDate));
+        setRecentSales(sorted);
+        setTotalSales((allSales || []).length);
 
         if (editId) {
           const sale = await salesApi.getById(editId);
@@ -112,7 +150,7 @@ export default function Sales() {
             saleDate: sale.saleDate?.slice(0, 10) || "",
             invoiceNo: sale.invoiceNo || "",
             customer: sale.customer?._id || sale.customer || "",
-            company:  sale.company?._id  || sale.company  || "",
+            company: sale.company?._id || sale.company || "",
             location: sale.location?._id || sale.location || "",
             transport: sale.transport?._id || sale.transport || "",
             lrNo: sale.lrNo || "",
@@ -157,11 +195,25 @@ export default function Sales() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.customer]);
 
+  /* 🆕 ──────── AUTO-REGENERATE invoice when date changes (new sales only) ──────── */
+
+
+  useEffect(() => {
+    if (editId) return;                // edit mode: don't auto-change
+    if (!form.saleDate) return;
+    (async () => {
+      const newInvoice = await generateInvoiceNo(form.saleDate);
+      setForm((f) => ({ ...f, invoiceNo: newInvoice }));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.saleDate]);
+
   /* ──────── 🆕 BALE LOOKUP — heart of bale-based sales ──────── */
   const lookupBale = async (baleNoRaw) => {
     const baleNo = (baleNoRaw || "").toUpperCase().trim();
     if (!baleNo) {
       setBaleData(null);
+      setSalePcsRows([]);                                                  // 🆕
       setBaleLookup({ loading: false, error: "" });
       return;
     }
@@ -170,7 +222,7 @@ export default function Sales() {
       setBaleLookup({ loading: true, error: "" });
       const inv = await inventoryApi.lookupByBale(baleNo);
 
-      // Auto-fill all bale-related fields
+      // Auto-fill bale-related fields
       setItemForm((prev) => ({
         ...prev,
         baleNo: inv.baleNo,
@@ -178,14 +230,39 @@ export default function Sales() {
         fabricQuality: inv.fabricQuality?._id || "",
         color: inv.color?._id || "",
         location: inv.location?._id || "",
-        meterPerPcs: prev.meterPerPcs || String(inv.avgMeterPerPcs || ""),
         rate: prev.rate || String(inv.rate || ""),
       }));
+
+      // 🆕 Generate per-piece rows
+      let rows = [];
+      if (Array.isArray(inv.pcsDetails) && inv.pcsDetails.length > 0) {
+        // Backend gave actual pcsDetails — use them
+        rows = inv.pcsDetails.map((p, i) => ({
+          id: Date.now() + i,
+          pcsNo: p.pcsNo || i + 1,
+          meter: parseFloat(p.meter) || 0,
+          color: p.color?._id || p.color || inv.color?._id || "",
+          selected: true,
+        }));
+      } else {
+        // Fallback: generate from availablePcs + avgMeterPerPcs
+        const count = inv.availablePcs || 0;
+        const perMeter = inv.avgMeterPerPcs || 0;
+        rows = Array.from({ length: count }, (_, i) => ({
+          id: Date.now() + i,
+          pcsNo: i + 1,
+          meter: perMeter,
+          color: inv.color?._id || "",
+          selected: true,
+        }));
+      }
+      setSalePcsRows(rows);
 
       setBaleData(inv);
       setBaleLookup({ loading: false, error: "" });
     } catch (err) {
       setBaleData(null);
+      setSalePcsRows([]);                                                  // 🆕
       setBaleLookup({ loading: false, error: err.message });
     }
   };
@@ -205,68 +282,101 @@ export default function Sales() {
   }, [baleData, editingId, items]);
 
   /* ──────── LIVE CALCULATIONS ──────── */
+  /* ──────── 🆕 LIVE CALCULATIONS (per-piece) ──────── */
+  const selectedPcs = useMemo(
+    () => salePcsRows.filter((r) => r.selected),
+    [salePcsRows]
+  );
+  const selectedPcsCount = selectedPcs.length;
+  const selectedTotalMeter = useMemo(
+    () => selectedPcs.reduce((s, r) => s + (parseFloat(r.meter) || 0), 0),
+    [selectedPcs]
+  );
   const itemAmount = useMemo(() => {
-    const pcs = parseFloat(itemForm.pcs) || 0;
-    const m   = parseFloat(itemForm.meterPerPcs) || 0;
-    const r   = parseFloat(itemForm.rate) || 0;
-    const d   = parseFloat(itemForm.discount) || 0;
-    const totalMeter = pcs * m;
-    return Math.max(totalMeter * r - totalMeter * d, 0);
-  }, [itemForm]);
+    const r = parseFloat(itemForm.rate) || 0;
+    const d = parseFloat(itemForm.discount) || 0;
+    return Math.max(selectedTotalMeter * r - selectedTotalMeter * d, 0);
+  }, [selectedTotalMeter, itemForm.rate, itemForm.discount]);
+
+  /* 🆕 ──────── FILTERED RECENT SALES ──────── */
+  const displayedSales = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return recentSales.slice(0, 10);   // default: last 10
+    }
+    const q = searchQuery.toLowerCase().trim();
+    return recentSales.filter((s) =>
+      (s.invoiceNo || "").toLowerCase().includes(q) ||
+      (s.customer?.name || "").toLowerCase().includes(q) ||
+      (s.items || []).some((it) => (it.baleNo || "").toLowerCase().includes(q))
+    );
+  }, [recentSales, searchQuery]);
+
 
   const summary = useMemo(() => {
-    const totalPcs   = items.reduce((s, it) => s + (it.pcs || 0), 0);
+    const totalPcs = items.reduce((s, it) => s + (it.pcs || 0), 0);
     const totalMeter = items.reduce((s, it) => s + (it.totalMeter || 0), 0);
     const grossAmount = items.reduce((s, it) => s + it.totalMeter * it.rate, 0);
     const discountTotal = items.reduce((s, it) => s + it.totalMeter * it.discount, 0);
     const netAmount = grossAmount - discountTotal;
     const avgMeter = totalPcs ? totalMeter / totalPcs : 0;
-    const avgRate  = totalMeter ? grossAmount / totalMeter : 0;
+    const avgRate = totalMeter ? grossAmount / totalMeter : 0;
     return { totalPcs, totalMeter, avgMeter, avgRate, grossAmount, discountTotal, netAmount };
   }, [items]);
+
+
+  const togglePcsRow = (id) => {
+    setSalePcsRows((rows) => rows.map((r) => r.id === id ? { ...r, selected: !r.selected } : r));
+  };
+  const updatePcsRow = (id, field, value) => {
+    setSalePcsRows((rows) => rows.map((r) => r.id === id ? { ...r, [field]: value } : r));
+  };
+  const toggleAllPcs = (val) => {
+    setSalePcsRows((rows) => rows.map((r) => ({ ...r, selected: val })));
+  };
 
   /* ──────── ITEM HANDLERS ──────── */
   const handleAddItem = () => {
     if (!itemForm.baleNo) return alert("Bale No daalo (e.g., A35)");
-    if (!baleData) return alert("Pehle bale lookup karo — valid bale enter karke Tab/Enter dabao");
+    if (!baleData) return alert("Pehle bale lookup karo");
 
-    const pcs = parseFloat(itemForm.pcs);
-    const meterPerPcs = parseFloat(itemForm.meterPerPcs);
     const rate = parseFloat(itemForm.rate);
     const discount = parseFloat(itemForm.discount) || 0;
+    if (!rate || rate <= 0) return alert("Rate enter karo");
 
-    if (!pcs || pcs < 1) return alert("PCS enter karo");
-    if (!meterPerPcs) return alert("Meter (Per PCS) enter karo");
-    if (!rate) return alert("Rate enter karo");
+    if (selectedPcsCount === 0) return alert("Kam se kam ek piece select karo");
+    if (selectedTotalMeter <= 0) return alert("Selected pieces ka total meter zero hai");
 
-    // 🆕 Check duplicate bale (same bale can't be added twice in same sale)
+    // Duplicate bale check
     const duplicate = items.find((it) =>
       it.baleNo === itemForm.baleNo && it.id !== editingId
     );
-    if (duplicate) {
-      return alert(`Bale ${itemForm.baleNo} already added. Edit that row instead.`);
-    }
+    if (duplicate) return alert(`Bale ${itemForm.baleNo} already added. Edit that row instead.`);
 
-    if (pcs > availablePcs) {
+    if (selectedPcsCount > availablePcs) {
       return alert(`Sirf ${availablePcs} PCS available hain bale ${itemForm.baleNo} me`);
     }
 
-    const totalMeter = pcs * meterPerPcs;
-    const amount = Math.max(totalMeter * rate - totalMeter * discount, 0);
+    const avgMeterPerPcs = selectedTotalMeter / selectedPcsCount;
+    const amount = Math.max(selectedTotalMeter * rate - selectedTotalMeter * discount, 0);
 
     const newRow = {
       id: editingId ?? Date.now(),
-      baleNo: itemForm.baleNo,                  // 🆕
+      baleNo: itemForm.baleNo,
       fabric: itemForm.fabric,
       fabricQuality: itemForm.fabricQuality,
       color: itemForm.color,
       location: itemForm.location || form.location,
-      pcs,
-      meterPerPcs,
-      totalMeter,
+      pcs: selectedPcsCount,
+      meterPerPcs: avgMeterPerPcs,
+      totalMeter: selectedTotalMeter,
       rate,
       discount,
       amount,
+      pcsDetails: selectedPcs.map((r) => ({                // 🆕 per-piece details
+        pcsNo: r.pcsNo,
+        meter: parseFloat(r.meter) || 0,
+        color: r.color || itemForm.color || undefined,
+      })),
     };
 
     if (editingId) {
@@ -276,8 +386,9 @@ export default function Sales() {
       setItems([...items, newRow]);
     }
 
-    // Reset item form + bale lookup
+    // Reset
     setItemForm(EMPTY_ITEM);
+    setSalePcsRows([]);
     setBaleData(null);
     setBaleLookup({ loading: false, error: "" });
   };
@@ -290,12 +401,9 @@ export default function Sales() {
       fabricQuality: row.fabricQuality,
       color: row.color,
       location: row.location || "",
-      pcs: String(row.pcs),
-      meterPerPcs: String(row.meterPerPcs),
       rate: String(row.rate),
       discount: String(row.discount),
     });
-    // Re-lookup the bale to get fresh availablePcs
     if (row.baleNo) lookupBale(row.baleNo);
   };
 
@@ -311,6 +419,7 @@ export default function Sales() {
 
   const handleClearBale = () => {
     setItemForm(EMPTY_ITEM);
+    setSalePcsRows([]);                                                     // 🆕
     setBaleData(null);
     setBaleLookup({ loading: false, error: "" });
     setEditingId(null);
@@ -320,12 +429,13 @@ export default function Sales() {
     if (!window.confirm("Saare items aur form reset ho jaayenge. Sure?")) return;
     setItems([]);
     setItemForm(EMPTY_ITEM);
+    setSalePcsRows([]);
     setBaleData(null);
     setBaleLookup({ loading: false, error: "" });
     setEditingId(null);
     setForm({
       ...EMPTY_FORM,
-      company:  masters.companies[0]?._id || "",
+      company: masters.companies[0]?._id || "",
       location: masters.locations[0]?._id || "",
     });
   };
@@ -334,7 +444,7 @@ export default function Sales() {
   const handleSave = async () => {
     if (!form.invoiceNo.trim()) return alert("Invoice No daalo");
     if (!form.customer) return alert("Customer select karo");
-    if (!form.company)  return alert("Company select karo");
+    if (!form.company) return alert("Company select karo");
     if (items.length === 0) return alert("Kam se kam ek item add karo");
 
     // Verify all items have baleNo
@@ -444,7 +554,7 @@ export default function Sales() {
                 <MasterSelect value={form.customer} onChange={(v) => setF("customer", v)} options={masters.customers} />
               </Field>
 
-              <Field label="Company" required>
+              {/* <Field label="Company" required>
                 <MasterSelect value={form.company} onChange={(v) => setF("company", v)} options={masters.companies} />
               </Field>
               <Field label="Location (Godown)">
@@ -452,14 +562,14 @@ export default function Sales() {
               </Field>
               <Field label="Transport">
                 <MasterSelect value={form.transport} onChange={(v) => setF("transport", v)} options={masters.transports} />
-              </Field>
+              </Field> */}
 
-              <Field label="LR No">
+              {/* <Field label="LR No">
                 <input className="sales-input" placeholder="Enter LR No" value={form.lrNo} onChange={(e) => setF("lrNo", e.target.value)} />
               </Field>
               <Field label="GST No">
                 <input className="sales-input" placeholder="(auto-fills from customer)" value={form.gstNo} onChange={(e) => setF("gstNo", e.target.value)} />
-              </Field>
+              </Field> */}
               <Field label="Sales Person">
                 <MasterSelect value={form.salesPerson} onChange={(v) => setF("salesPerson", v)} options={masters.salesPersons} />
               </Field>
@@ -579,30 +689,98 @@ export default function Sales() {
             </div>
 
             {/* User-editable fields (Row 2) */}
-            <div className="sales-grid sales-grid--5">
-              <Field label="PCS to Sell" required>
-                <input
-                  className="sales-input"
-                  type="number"
-                  min="1"
-                  max={availablePcs}
-                  value={itemForm.pcs}
-                  onChange={(e) => setIf("pcs", e.target.value)}
-                  placeholder="0"
-                  disabled={!baleData}
-                />
-              </Field>
-              <Field label="Meter (Per PCS)" required>
-                <input
-                  className="sales-input"
-                  type="number"
-                  step="0.01"
-                  value={itemForm.meterPerPcs}
-                  onChange={(e) => setIf("meterPerPcs", e.target.value)}
-                  placeholder="0.00"
-                  disabled={!baleData}
-                />
-              </Field>
+            {/* 🆕 PIECES TABLE — editable per piece */}
+            {baleData && salePcsRows.length > 0 && (
+              <div className="sales-pcs-section">
+                <div className="sales-pcs-header">
+                  <div>
+                    <h3 className="sales-pcs-title">
+                      Pieces in Bale ({salePcsRows.length})
+                    </h3>
+                    <div className="sales-pcs-hint">
+                      <Icon.Info />
+                      <span>Uncheck pieces to skip · Edit meter for partial sale</span>
+                    </div>
+                  </div>
+                  <div className="sales-pcs-actions">
+                    <button className="sales-btn sales-btn--ghost sales-btn--sm" onClick={() => toggleAllPcs(true)}>
+                      Select All
+                    </button>
+                    <button className="sales-btn sales-btn--ghost sales-btn--sm" onClick={() => toggleAllPcs(false)}>
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="sales-pcs-table-wrap">
+                  <table className="sales-pcs-table">
+                    <thead>
+                      <tr>
+                        <th className="sales-th--center" style={{ width: 50 }}>Sell</th>
+                        <th className="sales-th--center" style={{ width: 80 }}>PCS No</th>
+                        <th className="sales-th--center">Meter</th>
+                        <th className="sales-th--center">Color</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salePcsRows.map((row) => (
+                        <tr
+                          key={row.id}
+                          className={`sales-pcs-tr ${row.selected ? "sales-pcs-tr--active" : "sales-pcs-tr--skip"}`}
+                        >
+                          <td className="sales-td--center">
+                            <input
+                              type="checkbox"
+                              className="sales-pcs-check"
+                              checked={row.selected}
+                              onChange={() => togglePcsRow(row.id)}
+                            />
+                          </td>
+                          <td className="sales-td--center sales-td--strong">{row.pcsNo}</td>
+                          <td className="sales-td--center">
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="sales-input sales-pcs-input"
+                              value={row.meter}
+                              onChange={(e) => updatePcsRow(row.id, "meter", e.target.value)}
+                              disabled={!row.selected}
+                            />
+                          </td>
+                          <td className="sales-td--center">
+                            <select
+                              className="sales-input sales-pcs-input"
+                              value={row.color}
+                              onChange={(e) => updatePcsRow(row.id, "color", e.target.value)}
+                              disabled={!row.selected}
+                            >
+                              <option value="">—</option>
+                              {masters.colors.map((c) => (
+                                <option key={c._id} value={c._id}>{c.name}</option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="sales-pcs-total">
+                        <td colSpan="2" className="sales-td--strong sales-td--center">
+                          SELECTED
+                        </td>
+                        <td className="sales-td--center sales-td--strong">
+                          {selectedPcsCount} pcs · {fmt(selectedTotalMeter)}m
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Rate / Discount / Amount */}
+            <div className="sales-grid sales-grid--4">
               <Field label="Rate (Per Mtr)" required>
                 <input
                   className="sales-input"
@@ -623,6 +801,13 @@ export default function Sales() {
                   onChange={(e) => setIf("discount", e.target.value)}
                   placeholder="0.00"
                   disabled={!baleData}
+                />
+              </Field>
+              <Field label="Selected">
+                <input
+                  className="sales-input sales-input--readonly"
+                  readOnly
+                  value={`${selectedPcsCount} pcs · ${fmt(selectedTotalMeter)}m`}
                 />
               </Field>
               <Field label="Amount (INR)">
@@ -707,6 +892,7 @@ export default function Sales() {
             <Icon.Info />
             <span><strong>Flow:</strong> Bale no enter karo → Lookup → fabric/quality/color auto-fill → PCS to sell daalo → Add → Save. Inventory automatically bale-wise update hoga.</span>
           </div>
+
         </div>
 
         {/* RIGHT SUMMARY */}
@@ -736,6 +922,112 @@ export default function Sales() {
           </section>
         </aside>
       </div>
+
+          {!editId && !form.customer && items.length === 0 && recentSales.length > 0 && (
+            <section className="sales-card sales-recent-card">
+              <div className="sales-recent-header">
+                <div>
+                  <h2 className="sales-card__title" style={{ margin: 0 }}>
+                    Recent Sales <span className="sales-recent-count">
+                      ({searchQuery ? `${displayedSales.length} found` : `${totalSales} total`})
+                    </span>
+                  </h2>
+                  <div className="sales-recent-hint">
+                    <Icon.Info />
+                    <span>Customer select karte hi yeh table hide ho jayega · Search by Invoice, Customer, Bale</span>
+                  </div>
+                </div>
+                <div className="sales-recent-actions">
+                  <div className="sales-search-wrap">
+                    <input
+                      type="text"
+                      className="sales-search-input"
+                      placeholder="Search Invoice, Customer, Bale..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery && (
+                      <button
+                        className="sales-search-clear"
+                        onClick={() => setSearchQuery("")}
+                        title="Clear search"
+                      >
+                        <Icon.X />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    className="sales-btn sales-btn--ghost sales-btn--sm"
+                    onClick={() => navigate("/dashboard/reports/sales-report")}
+                  >
+                    <span>View All</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="sales-table-wrap">
+                <table className="sales-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Invoice No</th>
+                      <th>Customer</th>
+                      <th>Items</th>
+                      <th className="sales-th--right">Total PCS</th>
+                      <th className="sales-th--right">Total Meter</th>
+                      <th className="sales-th--right">Net Amount</th>
+                      <th className="sales-th--center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedSales.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" className="sales-td--empty">
+                          {searchQuery ? `🔍 "${searchQuery}" — koi match nahi mila` : "Koi sales nahi"}
+                        </td>
+                      </tr>
+                    ) : (
+                      displayedSales.map((s) => {
+                        const totalPcs = (s.items || []).reduce((sum, it) => sum + (it.pcs || 0), 0);
+                        const totalMeter = (s.items || []).reduce((sum, it) => sum + (it.totalMeter || 0), 0);
+                        const baleList = (s.items || []).map((it) => it.baleNo).filter(Boolean).join(", ");
+                        const status = s.paymentStatus || (s.balanceDue > 0 ? "Pending" : "Paid");
+                        return (
+                          <tr
+                            key={s._id}
+                            className="sales-tr sales-tr--clickable"
+                            onClick={() => navigate(`/dashboard/sales/${s._id}`)}
+                            title="Click to edit"
+                          >
+                            <td>{s.saleDate ? new Date(s.saleDate).toLocaleDateString("en-GB") : "—"}</td>
+                            <td>
+                              <span className="sales-recent-invoice">{s.invoiceNo || "—"}</span>
+                            </td>
+                            <td className="sales-td--strong">{s.customer?.name || "—"}</td>
+                            <td>
+                              <span style={{ fontSize: 11, color: "#64748b" }}>
+                                {baleList || "—"}
+                              </span>
+                            </td>
+                            <td className="sales-td--right">{totalPcs}</td>
+                            <td className="sales-td--right">{fmt(totalMeter)}</td>
+                            <td className="sales-td--right sales-td--strong">
+                              {fmt(s.netAmount || 0)}
+                            </td>
+                            <td className="sales-td--center">
+                              <span className={`sales-status-badge sales-status-badge--${status.toLowerCase()}`}>
+                                {status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
       <style>{`
         .sales-page, .sales-page * { box-sizing: border-box; }
@@ -905,7 +1197,194 @@ export default function Sales() {
 
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .sales-spinner { animation: spin 1s linear infinite; }
+        /* 🆕 PIECES TABLE */
+.sales-pcs-section {
+  margin-bottom: 18px;
+  padding: 14px;
+  background: #f0fdf4;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+}
+.sales-pcs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.sales-pcs-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #065f46;
+  margin: 0;
+}
+.sales-pcs-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sl-muted);
+  margin-top: 4px;
+}
+.sales-pcs-hint svg { width: 12px; height: 12px; }
+.sales-pcs-actions { display: flex; gap: 6px; }
 
+.sales-pcs-table-wrap {
+  background: #fff;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.sales-pcs-table { width: 100%; border-collapse: collapse; }
+.sales-pcs-table th {
+  background: #d1fae5;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #065f46;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border-bottom: 1px solid #a7f3d0;
+  white-space: nowrap;
+}
+.sales-pcs-table td {
+  padding: 8px 10px;
+  font-size: 13px;
+  border-bottom: 1px solid #ecfdf5;
+}
+.sales-pcs-tr--skip {
+  background: #f8fafc;
+  opacity: 0.55;
+}
+.sales-pcs-tr--active:hover {
+  background: #f0fdf4;
+}
+.sales-pcs-check {
+  width: 16px; height: 16px;
+  accent-color: #10b981;
+  cursor: pointer;
+}
+.sales-pcs-input {
+  padding: 5px 8px !important;
+  font-size: 13px !important;
+  max-width: 130px;
+  margin: 0 auto;
+  text-align: center;
+}
+.sales-pcs-total td {
+  background: #d1fae5;
+  border-top: 2px solid #10b981;
+  border-bottom: none;
+  padding: 10px;
+  font-weight: 700;
+  color: #065f46;
+}
+
+/* 🆕 RECENT SALES CARD */
+.sales-recent-card {
+  border-left: 4px solid #0891b2;
+  background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%);
+}
+.sales-recent-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.sales-recent-count {
+  color: var(--sl-muted);
+  font-weight: 500;
+  font-size: 14px;
+  margin-left: 6px;
+}
+.sales-recent-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sl-primary);
+  margin-top: 4px;
+}
+.sales-recent-hint svg { width: 12px; height: 12px; }
+.sales-recent-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sales-tr--clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.sales-tr--clickable:hover {
+  background: #ecfeff !important;
+}
+.sales-recent-invoice {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: var(--sl-primary);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* Search box */
+.sales-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.sales-search-input {
+  padding: 8px 32px 8px 12px;
+  border: 1px solid var(--sl-border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  width: 240px;
+  transition: all 0.15s;
+}
+.sales-search-input:focus {
+  outline: none;
+  border-color: var(--sl-primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+  width: 280px;
+}
+.sales-search-input::placeholder { color: #94a3b8; }
+.sales-search-clear {
+  position: absolute;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sl-text);
+}
+.sales-search-clear:hover { background: #cbd5e1; }
+.sales-search-clear svg { width: 11px; height: 11px; }
+
+/* Status badge */
+.sales-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.sales-status-badge--paid     { background: #d1fae5; color: #065f46; }
+.sales-status-badge--partial  { background: #fef3c7; color: #92400e; }
+.sales-status-badge--pending  { background: #fee2e2; color: #991b1b; }
+.sales-status-badge--advance  { background: #dbeafe; color: #1e40af; }
         /* Bale chip in table */
         .sales-bale-chip {
           display: inline-block;
@@ -959,6 +1438,7 @@ export default function Sales() {
           border-radius: 10px; padding: 14px 18px;
           display: flex; align-items: center; gap: 10px;
           font-size: 13px; color: #1e40af;
+          margin-bottom: 20px;
         }
         .sales-note svg { color: var(--sl-primary); flex-shrink: 0; }
 

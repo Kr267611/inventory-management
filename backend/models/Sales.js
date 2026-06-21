@@ -41,7 +41,7 @@ const salesSchema = new mongoose.Schema({
 
   // 🔗 Links
   customer:    { type: mongoose.Schema.Types.ObjectId, ref: "Customer",    required: true },
-  company:     { type: mongoose.Schema.Types.ObjectId, ref: "Company",     required: true },
+  company:     { type: mongoose.Schema.Types.ObjectId, ref: "Company",     required: false },
   location:    { type: mongoose.Schema.Types.ObjectId, ref: "Location" },
   salesPerson: { type: mongoose.Schema.Types.ObjectId, ref: "SalesPerson" },
   transport:   { type: mongoose.Schema.Types.ObjectId, ref: "Transport" },

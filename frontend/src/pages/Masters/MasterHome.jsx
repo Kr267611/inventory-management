@@ -199,9 +199,9 @@ export default function Masters({ onView, onAddNew }) {
           <button className="master-btn master-btn--ghost" onClick={() => navigate(-1)}>     {/* 🆕 */}
             <Icon.ArrowLeft /><span>Back</span>
           </button>
-          <button className="master-btn master-btn--primary" onClick={onAddNew} disabled>
+          {/* <button className="master-btn master-btn--primary" onClick={onAddNew} disabled>
             <Icon.Plus /><span>Add New Master</span><Icon.ChevronDown />
-          </button>
+          </button> */}
         </div>
       </div>
 
