@@ -78,6 +78,29 @@ const Icon = {
   ),
 };
 
+// 🆕 Generate auto voucher number — INW-YYYYMMDD-NNN
+const generateVoucherNo = async (entryDate) => {
+  const date = new Date(entryDate);
+  const yyyy = date.getFullYear();
+  const mm   = String(date.getMonth() + 1).padStart(2, "0");
+  const dd   = String(date.getDate()).padStart(2, "0");
+  const prefix = `INW-${yyyy}${mm}${dd}-`;
+
+  try {
+    const allInwards = await inwardApi.getAll();
+    let maxSeq = 0;
+    (allInwards || []).forEach((inw) => {
+      if (inw.voucherNo?.startsWith(prefix)) {
+        const seq = parseInt(inw.voucherNo.slice(prefix.length), 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+    });
+    return `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
+  } catch {
+    return `${prefix}001`;
+  }
+};
+
 const EMPTY_FORM = {
   entryDate: new Date().toISOString().slice(0, 10),
   voucherNo: "",
@@ -134,6 +157,12 @@ export default function InwardEntry() {
           uom: f.uom || m.uoms[0]?._id || "",
         }));
 
+        // 🆕 Auto-generate voucher for NEW inward only
+if (!editId) {
+  const newVoucher = await generateVoucherNo(new Date().toISOString().slice(0, 10));
+  setForm((f) => ({ ...f, voucherNo: newVoucher }));
+}
+
         // Agar edit mode hai, existing inward load karo
         if (editId) {
           const inw = await inwardApi.getById(editId);
@@ -178,6 +207,16 @@ export default function InwardEntry() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId]);
+
+   useEffect(() => {
+    if (editId) return;                // edit mode: don't auto-change
+    if (!form.entryDate) return;
+    (async () => {
+      const newVoucher = await generateVoucherNo(form.entryDate);
+      setForm((f) => ({ ...f, voucherNo: newVoucher }));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.entryDate]);
 
   /* ──────── 🆕 FILTERED RECENT INWARDS ──────── */
   const displayedInwards = useMemo(() => {
@@ -577,7 +616,7 @@ export default function InwardEntry() {
               title={editId ? "Bale No cannot be changed in edit mode" : ""}
             />
           </Field>
-          <Field label="Voucher No">
+          <Field label="Voucher No" required>
             <input
               className="inward-input"
               placeholder="Optional"
