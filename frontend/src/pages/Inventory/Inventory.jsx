@@ -99,15 +99,16 @@ const Inventory = () => {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const [stats, setStats] = useState({
-    totalItems: 0,
-    totalStockPcs: 0,
-    totalStockMtr: 0,
-    totalValue: 0,
-    lowStockItems: 0,
-    outOfStockItems: 0,
-  });
+ const [stats, setStats] = useState({
+  totalItems: 0,
+  totalStockPcs: 0,
+  totalStockMtr: 0,
+  totalValue: 0,
+  lowStockItems: 0,
+  outOfStockItems: 0,
+});
 
+const [viewBaleModal, setViewBaleModal] = useState(null);   // 🆕 selected bale for modal
   const [masters, setMasters] = useState({
     fabrics: [], qualities: [], colors: [], locations: [],
   });
@@ -160,33 +161,11 @@ const Inventory = () => {
   };
 
   /* ──────── VIEW BALE DETAILS ──────── */
-  const viewBale = (r) => {
-    const soldPcs = (r.totalPcs || 0) - (r.availablePcs || 0);
-    const soldMeter = (r.totalMeter || 0) - (r.availableMeter || 0);
-    alert(
-      `🏷 BALE: ${r.baleNo}\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Fabric:    ${r.fabric?.name || "-"}\n` +
-      `Quality:   ${r.fabricQuality?.name || "-"}\n` +
-      `Color:     ${r.color?.name || "-"}\n` +
-      `Location:  ${r.location?.name || "-"}\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Initial PCS:    ${r.totalPcs}\n` +
-      `Available PCS:  ${r.availablePcs}\n` +
-      `Sold PCS:       ${soldPcs}\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Initial Meter:    ${fmtNum(r.totalMeter)}\n` +
-      `Available Meter:  ${fmtNum(r.availableMeter)}\n` +
-      `Sold Meter:       ${fmtNum(soldMeter)}\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Rate (Per Mtr):  ₹ ${fmtNum(r.rate)}\n` +
-      `Avg Meter/PCS:   ${fmtNum(r.avgMeterPerPcs)}\n` +
-      `Total Value:     ₹ ${fmtNum(r.totalValue)}\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Source Voucher: ${r.inward?.voucherNo || "-"}`
-    );
-  };
-
+/* ──────── VIEW BALE DETAILS — opens modal ──────── */
+const viewBale = (r) => {
+  setViewBaleModal(r);
+};
+const closeBaleModal = () => setViewBaleModal(null);
   /* ──────── STAT CARDS ──────── */
   const STAT_CARDS = [
     { label: "Total Bales",        value: String(stats.totalItems),              hint: "Unique Bales",        tone: "default" },
@@ -432,6 +411,123 @@ const Inventory = () => {
         </span>
       </div>
 
+       {viewBaleModal && (
+        <div className="inv-modal-overlay" onClick={closeBaleModal}>
+          <div className="inv-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="inv-modal__header">
+              <div className="inv-modal__title-wrap">
+                <div className="inv-modal__icon"><Icon.Tag /></div>
+                <div>
+                  <div className="inv-modal__label">Bale Details</div>
+                  <div className="inv-modal__bale">{viewBaleModal.baleNo}</div>
+                </div>
+              </div>
+              <button className="inv-modal__close" onClick={closeBaleModal}>×</button>
+            </div>
+
+            {/* Body */}
+            <div className="inv-modal__body">
+              {/* Section 1: Basic Info */}
+              <div className="inv-modal__section">
+                <h3 className="inv-modal__section-title">Item Information</h3>
+                <div className="inv-modal__grid">
+                  <InfoCell label="Fabric" value={viewBaleModal.fabric?.name} />
+                  <InfoCell label="Quality" value={viewBaleModal.fabricQuality?.name} />
+                  <InfoCell label="Color" value={viewBaleModal.color?.name} />
+                  <InfoCell label="Location" value={viewBaleModal.location?.name} />
+                </div>
+              </div>
+
+              {/* Section 2: PCS Stats */}
+              <div className="inv-modal__section">
+                <h3 className="inv-modal__section-title">PCS Tracking</h3>
+                <div className="inv-modal__stats">
+                  <StatCard
+                    label="Initial PCS"
+                    value={viewBaleModal.totalPcs}
+                    color="#64748b"
+                  />
+                  <StatCard
+                    label="Available"
+                    value={viewBaleModal.availablePcs}
+                    color={viewBaleModal.availablePcs <= 0 ? "#ef4444" : "#10b981"}
+                    highlight
+                  />
+                  <StatCard
+                    label="Sold"
+                    value={(viewBaleModal.totalPcs || 0) - (viewBaleModal.availablePcs || 0)}
+                    color="#f59e0b"
+                  />
+                </div>
+              </div>
+
+              {/* Section 3: Meter Stats */}
+              <div className="inv-modal__section">
+                <h3 className="inv-modal__section-title">Meter Tracking</h3>
+                <div className="inv-modal__stats">
+                  <StatCard
+                    label="Initial Meter"
+                    value={fmtNum(viewBaleModal.totalMeter)}
+                    color="#64748b"
+                  />
+                  <StatCard
+                    label="Available"
+                    value={fmtNum(viewBaleModal.availableMeter)}
+                    color="#10b981"
+                    highlight
+                  />
+                  <StatCard
+                    label="Sold"
+                    value={fmtNum((viewBaleModal.totalMeter || 0) - (viewBaleModal.availableMeter || 0))}
+                    color="#f59e0b"
+                  />
+                </div>
+              </div>
+
+              {/* Section 4: Value */}
+              <div className="inv-modal__section">
+                <h3 className="inv-modal__section-title">Pricing & Value</h3>
+                <div className="inv-modal__grid">
+                  <InfoCell label="Rate (Per Mtr)" value={viewBaleModal.rate ? `₹ ${fmtNum(viewBaleModal.rate)}` : "—"} strong />
+                  <InfoCell label="Avg Meter/PCS" value={fmtNum(viewBaleModal.avgMeterPerPcs)} />
+                  <InfoCell
+                    label="Total Stock Value"
+                    value={`₹ ${fmtNum(viewBaleModal.totalValue)}`}
+                    strong
+                    big
+                  />
+                  <InfoCell
+                    label="Source Voucher"
+                    value={viewBaleModal.inward?.voucherNo || "—"}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="inv-modal__footer">
+              <button className="inv-btn inv-btn--ghost" onClick={closeBaleModal}>
+                Close
+              </button>
+              {/* <button
+                className="inv-btn inv-btn--primary"
+                onClick={() => {
+                  closeBaleModal();
+                  if (viewBaleModal.inward?._id) {
+                    navigate(`/dashboard/inward/${viewBaleModal.inward._id}`);
+                  } else {
+                    alert("Source inward not found");
+                  }
+                }}
+              >
+                <Icon.Eye /><span>View Source Inward</span>
+              </button> */}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .inv-page, .inv-page * { box-sizing: border-box; }
         .inv-page {
@@ -656,6 +752,194 @@ const Inventory = () => {
         }
         .inv-flow svg { color: var(--iv-primary); flex-shrink: 0; }
 
+        /* 🆕 MODAL */
+.inv-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  animation: fadeIn 0.15s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.inv-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  animation: slideUp 0.2s ease-out;
+}
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Header */
+.inv-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  color: #fff;
+  border-radius: 16px 16px 0 0;
+}
+.inv-modal__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.inv-modal__icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.inv-modal__icon svg { width: 20px; height: 20px; }
+.inv-modal__label {
+  font-size: 12px;
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.inv-modal__bale {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+.inv-modal__close {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  line-height: 1;
+}
+.inv-modal__close:hover { background: rgba(255,255,255,0.25); }
+
+/* Body */
+.inv-modal__body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.inv-modal__section {
+  margin-bottom: 24px;
+}
+.inv-modal__section:last-child {
+  margin-bottom: 0;
+}
+.inv-modal__section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--iv-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 0 0 12px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--iv-border);
+}
+
+/* Grid for info cells */
+.inv-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.inv-info-cell {
+  background: #f8fafc;
+  border: 1px solid var(--iv-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.inv-info-cell__label {
+  font-size: 11px;
+  color: var(--iv-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+.inv-info-cell__value {
+  font-size: 14px;
+  color: var(--iv-text);
+  font-weight: 500;
+}
+.inv-info-cell__value--strong { font-weight: 700; color: var(--iv-primary); }
+.inv-info-cell__value--big { font-size: 18px; }
+
+/* Stats row (PCS / Meter trackers) */
+.inv-modal__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.inv-stat-card {
+  background: #f8fafc;
+  border: 1px solid var(--iv-border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+.inv-stat-card--highlight {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.inv-stat-card__label {
+  font-size: 11px;
+  color: var(--iv-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+.inv-stat-card__value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+/* Footer */
+.inv-modal__footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--iv-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: #f8fafc;
+  border-radius: 0 0 16px 16px;
+}
+
+/* Mobile modal */
+@media (max-width: 600px) {
+  .inv-modal__body { padding: 16px; }
+  .inv-modal__grid { grid-template-columns: 1fr; }
+  .inv-modal__stats { grid-template-columns: 1fr; }
+  .inv-modal__bale { font-size: 18px; }
+  .inv-modal__header { padding: 16px 20px; }
+}
+
         @media (max-width: 1400px) {
           .inv-stats { grid-template-columns: repeat(3, 1fr); }
           .inv-filters__row { grid-template-columns: repeat(3, 1fr); }
@@ -692,6 +976,27 @@ function Field({ label, children }) {
     <div className="inv-field">
       <label className="inv-field__label">{label}</label>
       {children}
+    </div>
+  );
+}
+
+/* 🆕 Modal helpers */
+function InfoCell({ label, value, strong, big }) {
+  return (
+    <div className="inv-info-cell">
+      <div className="inv-info-cell__label">{label}</div>
+      <div className={`inv-info-cell__value ${strong ? "inv-info-cell__value--strong" : ""} ${big ? "inv-info-cell__value--big" : ""}`}>
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, color, highlight }) {
+  return (
+    <div className={`inv-stat-card ${highlight ? "inv-stat-card--highlight" : ""}`}>
+      <div className="inv-stat-card__label">{label}</div>
+      <div className="inv-stat-card__value" style={{ color }}>{value}</div>
     </div>
   );
 }

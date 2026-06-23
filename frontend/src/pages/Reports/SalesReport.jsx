@@ -92,6 +92,7 @@ export default function SalesReport() {
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS, ...getPresetRange("this_month") });
   const [appliedFilters, setAppliedFilters] = useState({ ...EMPTY_FILTERS, ...getPresetRange("this_month") });
   const [activePreset, setActivePreset] = useState("this_month");
+  const [viewSaleModal, setViewSaleModal] = useState(null);
 
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
 
@@ -475,7 +476,7 @@ export default function SalesReport() {
                         <button
                           className="srpt-icon-btn"
                           title="View"
-                          onClick={() => navigate(`/dashboard/sales/${s._id}`)}
+                    onClick={() => setViewSaleModal(s)}
                         >
                           <Icon.Eye />
                         </button>
@@ -502,6 +503,169 @@ export default function SalesReport() {
           </div>
         </div>
       </div>
+
+      {viewSaleModal && (
+        <div className="srpt-modal-overlay no-print" onClick={() => setViewSaleModal(null)}>
+          <div className="srpt-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="srpt-modal__header">
+              <div className="srpt-modal__title-wrap">
+                <div className="srpt-modal__icon"><Icon.Cart /></div>
+                <div>
+                  <div className="srpt-modal__label">Sale Invoice</div>
+                  <div className="srpt-modal__invoice">
+                    {viewSaleModal.invoiceNo || "—"}
+                    <span className={`srpt-modal__status-pill srpt-modal__status-pill--${(viewSaleModal.paymentStatus || "unpaid").toLowerCase()}`}>
+                      {viewSaleModal.paymentStatus || "Unpaid"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button className="srpt-modal__close" onClick={() => setViewSaleModal(null)}>×</button>
+            </div>
+
+            {/* Body */}
+            <div className="srpt-modal__body">
+              {/* Section 1: Customer & Sale Info */}
+              <div className="srpt-modal__section">
+                <h3 className="srpt-modal__section-title">Sale Information</h3>
+                <div className="srpt-modal__grid">
+                  <ModalCell label="Sale Date" value={formatDate(viewSaleModal.saleDate)} />
+                  <ModalCell label="Invoice No" value={viewSaleModal.invoiceNo} mono />
+                  <ModalCell label="Customer" value={viewSaleModal.customer?.name} strong />
+                  <ModalCell label="Sales Person" value={viewSaleModal.salesPerson?.name} />
+                  <ModalCell label="Payment Type" value={viewSaleModal.paymentType} />
+                  <ModalCell label="Due Date" value={viewSaleModal.dueDate ? formatDate(viewSaleModal.dueDate) : "—"} />
+                </div>
+              </div>
+
+              {/* Section 2: Financial Stats */}
+              <div className="srpt-modal__section">
+                <h3 className="srpt-modal__section-title">Financial Summary</h3>
+                <div className="srpt-modal__stats">
+                  <ModalStat label="Gross Amount" value={fmtINR(viewSaleModal.grossAmount)} color="#64748b" />
+                  <ModalStat label="Discount" value={fmtINR(viewSaleModal.discountTotal)} color="#f59e0b" />
+                  <ModalStat label="Net Amount" value={fmtINR(viewSaleModal.netAmount)} color="#2563eb" highlight />
+                  <ModalStat label="Paid" value={fmtINR(viewSaleModal.paidAmount)} color="#10b981" />
+                  <ModalStat
+                    label="Balance Due"
+                    value={fmtINR(viewSaleModal.balanceDue)}
+                    color={(viewSaleModal.balanceDue || 0) > 0 ? "#ef4444" : "#10b981"}
+                    highlight
+                  />
+                </div>
+              </div>
+
+              {/* Section 3: Items (Bale-wise) */}
+              {Array.isArray(viewSaleModal.items) && viewSaleModal.items.length > 0 && (
+                <div className="srpt-modal__section">
+                  <h3 className="srpt-modal__section-title">
+                    Items Sold ({viewSaleModal.items.length} bale{viewSaleModal.items.length > 1 ? "s" : ""})
+                  </h3>
+                  <div className="srpt-modal-table-wrap">
+                    <table className="srpt-modal-table">
+                      <thead>
+                        <tr>
+                          <th>Bale No</th>
+                          <th>Fabric</th>
+                          <th className="srpt-th--right">PCS</th>
+                          <th className="srpt-th--right">Meter</th>
+                          <th className="srpt-th--right">Rate</th>
+                          <th className="srpt-th--right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {viewSaleModal.items.map((it, idx) => (
+                          <tr key={it._id || idx}>
+                            <td>
+                              {it.baleNo ? <span className="srpt-bale-chip">{it.baleNo}</span> : "—"}
+                            </td>
+                            <td>{it.fabric?.name || "—"}</td>
+                            <td className="srpt-td--right">{fmtInt(it.pcs)}</td>
+                            <td className="srpt-td--right">{fmtNum(it.totalMeter)}</td>
+                            <td className="srpt-td--right">{fmtNum(it.rate)}</td>
+                            <td className="srpt-td--right srpt-td--strong">{fmtNum(it.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan="2" className="srpt-td--strong">TOTAL</td>
+                          <td className="srpt-td--right srpt-td--strong">{fmtInt(viewSaleModal.totalPcs)}</td>
+                          <td className="srpt-td--right srpt-td--strong">{fmtNum(viewSaleModal.totalMeter)}</td>
+                          <td></td>
+                          <td className="srpt-td--right srpt-td--strong">{fmtNum(viewSaleModal.netAmount)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Per-piece breakdown — if any item has pcsDetails */}
+                  {viewSaleModal.items.some((it) => Array.isArray(it.pcsDetails) && it.pcsDetails.length > 0) && (
+                    <div className="srpt-modal-pcs-wrap">
+                      <h4 className="srpt-modal-pcs-title">Per-Piece Breakdown</h4>
+                      {viewSaleModal.items.map((it, idx) => (
+                        Array.isArray(it.pcsDetails) && it.pcsDetails.length > 0 && (
+                          <div key={it._id || idx} className="srpt-modal-pcs-group">
+                            <div className="srpt-modal-pcs-group-head">
+                              <span className="srpt-bale-chip">{it.baleNo || "—"}</span>
+                              <span className="srpt-muted">{it.pcsDetails.length} pieces</span>
+                            </div>
+                            <div className="srpt-modal-pcs-pieces">
+                              {it.pcsDetails.map((p, i) => (
+                                <div key={i} className="srpt-modal-pcs-pill">
+                                  <span className="srpt-modal-pcs-pill__no">PCS {p.pcsNo}</span>
+                                  <span className="srpt-modal-pcs-pill__meter">{fmtNum(p.meter)}m</span>
+                                  {p.color?.name && (
+                                    <span className="srpt-modal-pcs-pill__color">{p.color.name}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Section 4: Extra Info */}
+              {(viewSaleModal.gstNo || viewSaleModal.lrNo || viewSaleModal.remarks) && (
+                <div className="srpt-modal__section">
+                  <h3 className="srpt-modal__section-title">Additional Info</h3>
+                  <div className="srpt-modal__grid">
+                    {viewSaleModal.gstNo && <ModalCell label="GST No" value={viewSaleModal.gstNo} mono />}
+                    {viewSaleModal.lrNo && <ModalCell label="LR No" value={viewSaleModal.lrNo} mono />}
+                    {viewSaleModal.transport?.name && <ModalCell label="Transport" value={viewSaleModal.transport.name} />}
+                    {viewSaleModal.paymentMode?.name && <ModalCell label="Payment Mode" value={viewSaleModal.paymentMode.name} />}
+                  </div>
+                  {viewSaleModal.remarks && (
+                    <div className="srpt-modal__remarks">{viewSaleModal.remarks}</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="srpt-modal__footer">
+              <button className="srpt-btn srpt-btn--ghost" onClick={() => setViewSaleModal(null)}>
+                Close
+              </button>
+              {/* <button
+                className="srpt-btn srpt-btn--primary"
+                onClick={() => {
+                  const id = viewSaleModal._id;
+                  setViewSaleModal(null);
+                  navigate(`/dashboard/sales/${id}`);
+                }}
+              >
+                <Icon.Eye /><span>Edit Sale</span>
+              </button> */}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .srpt-page, .srpt-page * { box-sizing: border-box; }
@@ -716,6 +880,321 @@ export default function SalesReport() {
           border-bottom: none;
         }
 
+        /* 🆕 MODAL */
+.srpt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  animation: srptFadeIn 0.15s ease-out;
+}
+@keyframes srptFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.srpt-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 880px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  animation: srptSlideUp 0.2s ease-out;
+}
+@keyframes srptSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Header */
+.srpt-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #065f46 0%, #10b981 100%);
+  color: #fff;
+  border-radius: 16px 16px 0 0;
+}
+.srpt-modal__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.srpt-modal__icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.srpt-modal__icon svg { width: 20px; height: 20px; }
+.srpt-modal__label {
+  font-size: 12px;
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.srpt-modal__invoice {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.srpt-modal__status-pill {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-family: inherit;
+}
+.srpt-modal__status-pill--paid    { background: rgba(255,255,255,0.95); color: #047857; }
+.srpt-modal__status-pill--partial { background: rgba(254,243,199,0.95); color: #92400e; }
+.srpt-modal__status-pill--unpaid  { background: rgba(254,226,226,0.95); color: #991b1b; }
+.srpt-modal__close {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  line-height: 1;
+}
+.srpt-modal__close:hover { background: rgba(255,255,255,0.25); }
+
+/* Body */
+.srpt-modal__body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.srpt-modal__section {
+  margin-bottom: 24px;
+}
+.srpt-modal__section:last-child {
+  margin-bottom: 0;
+}
+.srpt-modal__section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--srpt-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 0 0 12px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--srpt-border);
+}
+
+/* Grid info cells */
+.srpt-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.srpt-modal-cell {
+  background: #f8fafc;
+  border: 1px solid var(--srpt-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.srpt-modal-cell__label {
+  font-size: 11px;
+  color: var(--srpt-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+.srpt-modal-cell__value {
+  font-size: 14px;
+  color: var(--srpt-text);
+  font-weight: 500;
+}
+.srpt-modal-cell__value--strong { font-weight: 700; color: var(--srpt-primary); }
+.srpt-modal-cell__value--mono { font-family: ui-monospace, SFMono-Regular, monospace; }
+
+/* Financial stats */
+.srpt-modal__stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+.srpt-modal-stat {
+  background: #f8fafc;
+  border: 1px solid var(--srpt-border);
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+}
+.srpt-modal-stat--highlight {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.srpt-modal-stat__label {
+  font-size: 10px;
+  color: var(--srpt-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+.srpt-modal-stat__value {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* Items mini table */
+.srpt-modal-table-wrap {
+  border: 1px solid var(--srpt-border);
+  border-radius: 8px;
+  overflow: hidden;
+  overflow-x: auto;
+}
+.srpt-modal-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.srpt-modal-table th {
+  background: #f1f5f9;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--srpt-muted);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid var(--srpt-border);
+  white-space: nowrap;
+}
+.srpt-modal-table td {
+  padding: 8px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap;
+}
+.srpt-modal-table tfoot td {
+  background: #f8fafc;
+  border-top: 2px solid var(--srpt-border);
+  border-bottom: none;
+  font-weight: 700;
+}
+
+/* Per-piece breakdown */
+.srpt-modal-pcs-wrap {
+  margin-top: 16px;
+  padding: 14px;
+  background: #f0fdf4;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+}
+.srpt-modal-pcs-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #065f46;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin: 0 0 10px 0;
+}
+.srpt-modal-pcs-group {
+  margin-bottom: 12px;
+}
+.srpt-modal-pcs-group:last-child { margin-bottom: 0; }
+.srpt-modal-pcs-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.srpt-modal-pcs-pieces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.srpt-modal-pcs-pill {
+  background: #fff;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.srpt-modal-pcs-pill__no {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-weight: 700;
+  color: #065f46;
+}
+.srpt-modal-pcs-pill__meter {
+  color: var(--srpt-text);
+  font-weight: 500;
+}
+.srpt-modal-pcs-pill__color {
+  background: #e0f2fe;
+  color: #075985;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* Remarks */
+.srpt-modal__remarks {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #92400e;
+  font-style: italic;
+  margin-top: 12px;
+}
+
+/* Footer */
+.srpt-modal__footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--srpt-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: #f8fafc;
+  border-radius: 0 0 16px 16px;
+}
+
+/* Mobile modal */
+@media (max-width: 700px) {
+  .srpt-modal__body { padding: 16px; }
+  .srpt-modal__grid { grid-template-columns: 1fr; }
+  .srpt-modal__stats { grid-template-columns: repeat(2, 1fr); }
+  .srpt-modal__invoice { font-size: 16px; }
+  .srpt-modal__header { padding: 16px 20px; }
+}
+
+@media (max-width: 1400px) {
+  .srpt-stats { grid-template-columns: repeat(3, 1fr); }
+}
+
         @media (max-width: 1400px) {
           .srpt-stats { grid-template-columns: repeat(3, 1fr); }
         }
@@ -791,6 +1270,27 @@ function StatCard({ label, value, hint, icon, tone }) {
         <div className="srpt-stat__value">{value}</div>
         <div className="srpt-stat__hint">{hint}</div>
       </div>
+    </div>
+  );
+}
+
+/* 🆕 Modal helpers */
+function ModalCell({ label, value, strong, mono }) {
+  return (
+    <div className="srpt-modal-cell">
+      <div className="srpt-modal-cell__label">{label}</div>
+      <div className={`srpt-modal-cell__value ${strong ? "srpt-modal-cell__value--strong" : ""} ${mono ? "srpt-modal-cell__value--mono" : ""}`}>
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function ModalStat({ label, value, color, highlight }) {
+  return (
+    <div className={`srpt-modal-stat ${highlight ? "srpt-modal-stat--highlight" : ""}`}>
+      <div className="srpt-modal-stat__label">{label}</div>
+      <div className="srpt-modal-stat__value" style={{ color }}>{value}</div>
     </div>
   );
 }

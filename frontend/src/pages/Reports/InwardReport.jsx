@@ -152,6 +152,8 @@ export default function InwardReport() {
   const [appliedFilters, setAppliedFilters] = useState({ ...EMPTY_FILTERS, ...getPresetRange("this_month") });
   const [activePreset, setActivePreset] = useState("this_month");
 
+  const [viewInwardModal, setViewInwardModal] = useState(null);
+
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
 
   /* ──────── LOAD DATA ──────── */
@@ -513,7 +515,7 @@ export default function InwardReport() {
                           <button
                             className="irpt-icon-btn"
                             title="View Details"
-                            onClick={() => navigate(`/dashboard/inward/${i._id}`)}
+                            onClick={() => setViewInwardModal(i)}
                           >
                             <Icon.Eye />
                           </button>
@@ -539,6 +541,135 @@ export default function InwardReport() {
           </div>
         </div>
       </div>
+
+      {viewInwardModal && (
+        <div className="irpt-modal-overlay no-print" onClick={() => setViewInwardModal(null)}>
+          <div className="irpt-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="irpt-modal__header">
+              <div className="irpt-modal__title-wrap">
+                <div className="irpt-modal__icon"><Icon.Box /></div>
+                <div>
+                  <div className="irpt-modal__label">Inward Entry</div>
+                  <div className="irpt-modal__voucher">
+                    {viewInwardModal.voucherNo || "—"}
+                    {viewInwardModal.baleNo && (
+                      <span className="irpt-modal__bale-tag">Bale: {viewInwardModal.baleNo}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button className="irpt-modal__close" onClick={() => setViewInwardModal(null)}>×</button>
+            </div>
+
+            {/* Body */}
+            <div className="irpt-modal__body">
+              {/* Section 1: Basic Info */}
+              <div className="irpt-modal__section">
+                <h3 className="irpt-modal__section-title">Entry Information</h3>
+                <div className="irpt-modal__grid">
+                  <ModalCell label="Entry Date" value={formatDate(viewInwardModal.entryDate)} />
+                  <ModalCell label="Voucher No" value={viewInwardModal.voucherNo} mono />
+                  <ModalCell label="Invoice No" value={viewInwardModal.invoiceNo} mono />
+                  <ModalCell label="Supplier" value={viewInwardModal.supplier?.name} />
+                  <ModalCell label="Company" value={viewInwardModal.company?.name} />
+                  <ModalCell label="Location" value={viewInwardModal.location?.name} />
+                </div>
+              </div>
+
+              {/* Section 2: Item Details */}
+              <div className="irpt-modal__section">
+                <h3 className="irpt-modal__section-title">Item Details</h3>
+                <div className="irpt-modal__grid">
+                  <ModalCell label="Fabric" value={viewInwardModal.fabric?.name} strong />
+                  <ModalCell label="Quality" value={viewInwardModal.fabricQuality?.name} />
+                  <ModalCell label="Design No" value={viewInwardModal.design?.designNo} mono />
+                  <ModalCell label="Default Color" value={viewInwardModal.defaultColor?.name} />
+                </div>
+              </div>
+
+              {/* Section 3: Stock Stats */}
+              <div className="irpt-modal__section">
+                <h3 className="irpt-modal__section-title">Stock & Pricing</h3>
+                <div className="irpt-modal__stats">
+                  <ModalStat label="Total PCS" value={fmtInt(viewInwardModal.totalPcs)} color="#2563eb" />
+                  <ModalStat label="Total Meter" value={fmtNum(viewInwardModal.totalMeter)} color="#9333ea" />
+                  <ModalStat label="Rate / Mtr" value={`₹ ${fmtNum(viewInwardModal.rate)}`} color="#f59e0b" />
+                  <ModalStat
+                    label="Total Amount"
+                    value={fmtINR(viewInwardModal.baseCurrencyTotal || (viewInwardModal.totalMeter || 0) * (viewInwardModal.rate || 0))}
+                    color="#10b981"
+                    highlight
+                  />
+                </div>
+              </div>
+
+              {/* Section 4: PCS Details (per-piece) */}
+              {Array.isArray(viewInwardModal.pcsDetails) && viewInwardModal.pcsDetails.length > 0 && (
+                <div className="irpt-modal__section">
+                  <h3 className="irpt-modal__section-title">
+                    Per-Piece Breakdown ({viewInwardModal.pcsDetails.length} pieces)
+                  </h3>
+                  <div className="irpt-modal-table-wrap">
+                    <table className="irpt-modal-table">
+                      <thead>
+                        <tr>
+                          <th>PCS No</th>
+                          <th className="irpt-th--right">Meter</th>
+                          <th>Color</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {viewInwardModal.pcsDetails.map((p, idx) => (
+                          <tr key={p._id || idx}>
+                            <td className="irpt-td--strong">{p.pcsNo || idx + 1}</td>
+                            <td className="irpt-td--right">{fmtNum(p.meter)}</td>
+                            <td>{p.color?.name || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td className="irpt-td--strong">TOTAL</td>
+                          <td className="irpt-td--right irpt-td--strong">
+                            {fmtNum(viewInwardModal.pcsDetails.reduce((s, p) => s + (parseFloat(p.meter) || 0), 0))}
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Section 5: Remarks if present */}
+              {viewInwardModal.remarks && (
+                <div className="irpt-modal__section">
+                  <h3 className="irpt-modal__section-title">Remarks</h3>
+                  <div className="irpt-modal__remarks">{viewInwardModal.remarks}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="irpt-modal__footer">
+              <button className="irpt-btn irpt-btn--ghost" onClick={() => setViewInwardModal(null)}>
+                Close
+              </button>
+              {/* <button
+                className="irpt-btn irpt-btn--primary"
+                onClick={() => {
+                  const id = viewInwardModal._id;
+                  setViewInwardModal(null);
+                  navigate(`/dashboard/inward/${id}`);
+                }}
+              >
+                <Icon.Eye /><span>Edit Inward</span>
+              </button> */}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .irpt-page, .irpt-page * { box-sizing: border-box; }
@@ -762,6 +893,255 @@ export default function InwardReport() {
           border-bottom: none;
         }
 
+        /* 🆕 MODAL */
+.irpt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  animation: irptFadeIn 0.15s ease-out;
+}
+@keyframes irptFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.irpt-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  animation: irptSlideUp 0.2s ease-out;
+}
+@keyframes irptSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Header */
+.irpt-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  color: #fff;
+  border-radius: 16px 16px 0 0;
+}
+.irpt-modal__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.irpt-modal__icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.irpt-modal__icon svg { width: 20px; height: 20px; }
+.irpt-modal__label {
+  font-size: 12px;
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.irpt-modal__voucher {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.irpt-modal__bale-tag {
+  background: rgba(255,255,255,0.2);
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.irpt-modal__close {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  line-height: 1;
+}
+.irpt-modal__close:hover { background: rgba(255,255,255,0.25); }
+
+/* Body */
+.irpt-modal__body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.irpt-modal__section {
+  margin-bottom: 24px;
+}
+.irpt-modal__section:last-child {
+  margin-bottom: 0;
+}
+.irpt-modal__section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--irpt-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 0 0 12px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--irpt-border);
+}
+
+/* Grid for info cells */
+.irpt-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.irpt-modal-cell {
+  background: #f8fafc;
+  border: 1px solid var(--irpt-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.irpt-modal-cell__label {
+  font-size: 11px;
+  color: var(--irpt-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+.irpt-modal-cell__value {
+  font-size: 14px;
+  color: var(--irpt-text);
+  font-weight: 500;
+}
+.irpt-modal-cell__value--strong { font-weight: 700; color: var(--irpt-primary); }
+.irpt-modal-cell__value--mono { font-family: ui-monospace, SFMono-Regular, monospace; }
+
+/* Stats row */
+.irpt-modal__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.irpt-modal-stat {
+  background: #f8fafc;
+  border: 1px solid var(--irpt-border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+.irpt-modal-stat--highlight {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.irpt-modal-stat__label {
+  font-size: 10px;
+  color: var(--irpt-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+.irpt-modal-stat__value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* PCS details mini table */
+.irpt-modal-table-wrap {
+  border: 1px solid var(--irpt-border);
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.irpt-modal-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.irpt-modal-table th {
+  background: #f1f5f9;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--irpt-muted);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid var(--irpt-border);
+}
+.irpt-modal-table td {
+  padding: 8px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.irpt-modal-table tfoot td {
+  background: #f8fafc;
+  border-top: 2px solid var(--irpt-border);
+  border-bottom: none;
+  font-weight: 700;
+}
+
+/* Remarks block */
+.irpt-modal__remarks {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #92400e;
+  font-style: italic;
+}
+
+/* Footer */
+.irpt-modal__footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--irpt-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: #f8fafc;
+  border-radius: 0 0 16px 16px;
+}
+
+/* Mobile modal */
+@media (max-width: 600px) {
+  .irpt-modal__body { padding: 16px; }
+  .irpt-modal__grid { grid-template-columns: 1fr; }
+  .irpt-modal__stats { grid-template-columns: repeat(2, 1fr); }
+  .irpt-modal__voucher { font-size: 16px; }
+  .irpt-modal__header { padding: 16px 20px; }
+}
+
+// /* RESPONSIVE */
+// @media (max-width: 1200px) {
+//   .irpt-stats { grid-template-columns: repeat(2, 1fr); }
+
         /* RESPONSIVE */
         @media (max-width: 1200px) {
           .irpt-stats { grid-template-columns: repeat(2, 1fr); }
@@ -850,6 +1230,8 @@ function Field({ label, full, children }) {
   );
 }
 
+
+
 function StatCard({ label, value, hint, icon, tone }) {
   return (
     <div className="irpt-stat">
@@ -859,6 +1241,27 @@ function StatCard({ label, value, hint, icon, tone }) {
         <div className="irpt-stat__value">{value}</div>
         <div className="irpt-stat__hint">{hint}</div>
       </div>
+    </div>
+  );
+}
+
+/* 🆕 Modal helpers */
+function ModalCell({ label, value, strong, mono }) {
+  return (
+    <div className="irpt-modal-cell">
+      <div className="irpt-modal-cell__label">{label}</div>
+      <div className={`irpt-modal-cell__value ${strong ? "irpt-modal-cell__value--strong" : ""} ${mono ? "irpt-modal-cell__value--mono" : ""}`}>
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function ModalStat({ label, value, color, highlight }) {
+  return (
+    <div className={`irpt-modal-stat ${highlight ? "irpt-modal-stat--highlight" : ""}`}>
+      <div className="irpt-modal-stat__label">{label}</div>
+      <div className="irpt-modal-stat__value" style={{ color }}>{value}</div>
     </div>
   );
 }
