@@ -417,7 +417,7 @@ export default function PartyWiseReport() {
           <div className="pl-cust-block pl-cust-block--center">
             <span className="pl-cust-label">Print Date :</span>
             <span>{formatDate(new Date())}</span>
-            <div className="pl-cust-totalqty">{fmtInt(ledgerTotals.totalQty)}</div>
+            {/* <div className="pl-cust-totalqty">{fmtInt(ledgerTotals.totalQty)}</div> */}
           </div>
           <div className="pl-cust-block pl-cust-block--right">
             <div className="pl-cust-summary">
