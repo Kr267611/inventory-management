@@ -239,6 +239,80 @@ function DashboardHome() {
         </div>
       </div>
 
+      <div className="dashboard-quick-actions">
+  <button
+    className="dashboard-quick-card dashboard-quick-card--blue"
+    onClick={() => navigate("/dashboard/inward")}
+  >
+    <div className="dashboard-quick-icon">📥</div>
+    <div className="dashboard-quick-text">
+      <div className="dashboard-quick-title">New Inward</div>
+      <div className="dashboard-quick-sub">Add bale entry</div>
+    </div>
+    <div className="dashboard-quick-arrow">→</div>
+  </button>
+
+  <button
+    className="dashboard-quick-card dashboard-quick-card--green"
+    onClick={() => navigate("/dashboard/sales")}
+  >
+    <div className="dashboard-quick-icon">🛒</div>
+    <div className="dashboard-quick-text">
+      <div className="dashboard-quick-title">New Sale</div>
+      <div className="dashboard-quick-sub">Create invoice</div>
+    </div>
+    <div className="dashboard-quick-arrow">→</div>
+  </button>
+
+  <button
+    className="dashboard-quick-card dashboard-quick-card--orange"
+    onClick={() => navigate("/dashboard/payment")}
+  >
+    <div className="dashboard-quick-icon">💰</div>
+    <div className="dashboard-quick-text">
+      <div className="dashboard-quick-title">Add Payment</div>
+      <div className="dashboard-quick-sub">Receive money</div>
+    </div>
+    <div className="dashboard-quick-arrow">→</div>
+  </button>
+
+  <button
+    className="dashboard-quick-card dashboard-quick-card--purple"
+    onClick={() => navigate("/dashboard/inventory")}
+  >
+    <div className="dashboard-quick-icon">📦</div>
+    <div className="dashboard-quick-text">
+      <div className="dashboard-quick-title">Inventory</div>
+      <div className="dashboard-quick-sub">Stock view</div>
+    </div>
+    <div className="dashboard-quick-arrow">→</div>
+  </button>
+
+  <button
+    className="dashboard-quick-card dashboard-quick-card--cyan"
+    onClick={() => navigate("/dashboard/reports")}
+  >
+    <div className="dashboard-quick-icon">📊</div>
+    <div className="dashboard-quick-text">
+      <div className="dashboard-quick-title">Reports</div>
+      <div className="dashboard-quick-sub">View all reports</div>
+    </div>
+    <div className="dashboard-quick-arrow">→</div>
+  </button>
+
+  <button
+    className="dashboard-quick-card dashboard-quick-card--pink"
+    onClick={() => navigate("/dashboard/reports/party-wise-report")}
+  >
+    <div className="dashboard-quick-icon">🧾</div>
+    <div className="dashboard-quick-text">
+      <div className="dashboard-quick-title">Party Ledger</div>
+      <div className="dashboard-quick-sub">Customer-wise</div>
+    </div>
+    <div className="dashboard-quick-arrow">→</div>
+  </button>
+</div>
+
       {/* Stats Cards */}
       <div className="dashboard-stats-grid">
         {stats.map((stat, idx) => (
@@ -479,6 +553,84 @@ function DashboardHome() {
         }
         .dashboard-breadcrumb__link { color: var(--dh-primary); cursor: pointer; }
         .dashboard-breadcrumb__sep { color: #cbd5e1; }
+        /* 🆕 QUICK ACTIONS — Shortcut cards */
+.dashboard-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+}
+.dashboard-quick-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: all 0.2s;
+  box-shadow: var(--dh-shadow);
+  position: relative;
+  overflow: hidden;
+}
+.dashboard-quick-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+.dashboard-quick-card:active { transform: translateY(0); }
+
+.dashboard-quick-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+}
+.dashboard-quick-text {
+  flex: 1;
+  min-width: 0;
+  color: #fff;
+}
+.dashboard-quick-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.dashboard-quick-sub {
+  font-size: 11px;
+  opacity: 0.9;
+}
+.dashboard-quick-arrow {
+  font-size: 18px;
+  color: #fff;
+  opacity: 0.7;
+  transition: transform 0.2s, opacity 0.2s;
+  font-weight: 700;
+}
+.dashboard-quick-card:hover .dashboard-quick-arrow {
+  transform: translateX(4px);
+  opacity: 1;
+}
+
+/* Color variants */
+.dashboard-quick-card--blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+.dashboard-quick-card--green {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+.dashboard-quick-card--orange {
+  background: linear-gradient(135deg, #fb923c 0%, #f59e0b 100%);
+}
+.dashboard-quick-card--purple {
+  background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 100%);
+}
+.dashboard-quick-card--cyan {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+}
+.dashboard-quick-card--pink {
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+}
+
 
         /* STAT CARDS */
         .dashboard-stats-grid {
@@ -683,15 +835,19 @@ function DashboardHome() {
            ──────────────────────────────── */
 
         /* Large tablet (1200px) — stats stay 4, tables stack early */
-        @media (max-width: 1200px) {
-          .dashboard-stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-          .dashboard-tables-grid,
-          .dashboard-bottom-grid {
-            grid-template-columns: 1fr;
-          }
-        }
+       /* Large tablet (1200px) */
+@media (max-width: 1200px) {
+  .dashboard-quick-actions {
+    grid-template-columns: repeat(3, 1fr);  /* 🆕 3 cols */
+  }
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .dashboard-tables-grid,
+  .dashboard-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
         /* Small tablet (768px) */
         @media (max-width: 768px) {
@@ -707,6 +863,7 @@ function DashboardHome() {
 
         /* Mobile (560px) — stats single column */
         @media (max-width: 560px) {
+          .dashboard-quick-actions { grid-template-columns: repeat(2, 1fr); }
           .dashboard-stats-grid { grid-template-columns: 1fr; }
           .dashboard-header h1 { font-size: 18px; }
           .dashboard-stat-card { padding: 12px; }
