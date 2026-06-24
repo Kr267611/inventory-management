@@ -174,12 +174,12 @@ const handleSubmit = async (e) => {
             </button>
 
             {/* 🔥 Divider */}
-            <div className="divider">or</div>
+            {/* <div className="divider">or</div> */}
 
             {/* 🔥 OTP Button */}
-            <button type="button" className="secondary-btn">
+            {/* <button type="button" className="secondary-btn">
               🔐 Login with OTP
-            </button>
+            </button> */}
 
           </form>
 
