@@ -480,116 +480,7 @@ if (!editId) {
         {/* ════════════════════════════════
             🆕 Recent Inward - Auto Hide when user types
             ════════════════════════════════ */}
-        {!editId && !form.baleNo && pcsDetails.length === 0 && recentInwards.length > 0 && (
-          <section className="inward-card inward-recent-card">
-            <div className="inward-recent-header">
-              <div>
-                <h2 className="inward-card__title inward-card__title--inline">
-                  Recent Inwards <span className="inward-recent-count">
-                    ({searchQuery ? `${displayedInwards.length} found` : `${totalInwards} total`})
-                  </span>
-                </h2>
-                <div className="inward-pcs-hint">
-                  <Icon.Info />
-                  <span>Form fill karte hi yeh table hide ho jayega · Search by Bale No, Fabric, Quality</span>
-                </div>
-              </div>
-              <div className="inward-recent-actions">                                       {/* 🆕 */}
-                {/* 🆕 Search Box */}
-                <div className="inward-search-wrap">
-                  <span className="inward-search-icon"><Icon.Search /></span>
-                  <input
-                    type="text"
-                    className="inward-search-input"
-                    placeholder="Search Bale No, Fabric..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                  {searchQuery && (
-                    <button
-                      className="inward-search-clear"
-                      onClick={() => setSearchQuery("")}
-                      title="Clear search"
-                    >
-                      <Icon.X />
-                    </button>
-                  )}
-                </div>
-                <button
-                  className="inward-btn inward-btn--ghost inward-btn--sm"
-                  onClick={() => navigate("/dashboard/reports/inward-report")}
-                >
-                  <span>View All</span>
-                </button>
-              </div>
-            </div>
-            <div className="inward-table-wrap">
-              <table className="inward-table">
-                <thead>
-                  <tr>
-                    <th className="inward-th">Date</th>
-                    <th className="inward-th">Bale No</th>
-                    <th className="inward-th">Fabric</th>
-                    <th className="inward-th">Quality</th>
-                    <th className="inward-th inward-th--center">Pcs</th>
-                    <th className="inward-th inward-th--center">Meter</th>
-                    <th className="inward-th inward-th--center">Rate (₹)</th>
-                    <th className="inward-th inward-th--center">Total (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayedInwards.length === 0 ? (
-                    <tr>
-                      <td colSpan="8" className="inward-td inward-td--empty">
-                        {searchQuery ? `🔍 "${searchQuery}" — koi match nahi mila` : "Koi inward nahi"}
-                      </td>
-                    </tr>
-                  ) : (
-                    displayedInwards.map((inw) => {
-                      const totalMeter = (inw.pcsDetails || []).reduce(
-                        (s, p) => s + (parseFloat(p.meter) || 0), 0
-                      );
-                      const totalAmount = totalMeter * (parseFloat(inw.rate) || 0);
-                      return (
-                        <tr
-                          key={inw._id}
-                          className="inward-tr inward-tr--clickable"
-                          onClick={() => navigate(`/dashboard/inward/${inw._id}`)}
-                          title="Click to edit"
-                        >
-                          <td className="inward-td">
-                            {inw.entryDate
-                              ? new Date(inw.entryDate).toLocaleDateString("en-GB")
-                              : "—"}
-                          </td>
-                          <td className="inward-td">
-                            <strong className="inward-recent-bale">{inw.baleNo || "—"}</strong>
-                          </td>
-                          <td className="inward-td">{inw.fabric?.name || "—"}</td>
-                          <td className="inward-td">{inw.fabricQuality?.name || "—"}</td>
-                          <td className="inward-td inward-td--center">
-                            {(inw.pcsDetails || []).length}
-                          </td>
-                          <td className="inward-td inward-td--center">
-                            {totalMeter.toFixed(2)}
-                          </td>
-                          <td className="inward-td inward-td--center">
-                            {(parseFloat(inw.rate) || 0).toFixed(2)}
-                          </td>
-                          <td className="inward-td inward-td--center">
-                            <strong className="inward-recent-total">
-                              {totalAmount.toFixed(2)}
-                            </strong>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
+  
 
         {/* ════════════════════════════════
             🆕 TOP STRIP — Date + Bale No
@@ -859,6 +750,116 @@ if (!editId) {
             </Field>
           </div>
         </section>
+              {!editId && !form.baleNo && pcsDetails.length === 0 && recentInwards.length > 0 && (
+          <section className="inward-card inward-recent-card">
+            <div className="inward-recent-header">
+              <div>
+                <h2 className="inward-card__title inward-card__title--inline">
+                  Recent Inwards <span className="inward-recent-count">
+                    ({searchQuery ? `${displayedInwards.length} found` : `${totalInwards} total`})
+                  </span>
+                </h2>
+                <div className="inward-pcs-hint">
+                  <Icon.Info />
+                  <span>Form fill karte hi yeh table hide ho jayega · Search by Bale No, Fabric, Quality</span>
+                </div>
+              </div>
+              <div className="inward-recent-actions">                                       {/* 🆕 */}
+                {/* 🆕 Search Box */}
+                <div className="inward-search-wrap">
+                  <span className="inward-search-icon"><Icon.Search /></span>
+                  <input
+                    type="text"
+                    className="inward-search-input"
+                    placeholder="Search Bale No, Fabric..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button
+                      className="inward-search-clear"
+                      onClick={() => setSearchQuery("")}
+                      title="Clear search"
+                    >
+                      <Icon.X />
+                    </button>
+                  )}
+                </div>
+                <button
+                  className="inward-btn inward-btn--ghost inward-btn--sm"
+                  onClick={() => navigate("/dashboard/reports/inward-report")}
+                >
+                  <span>View All</span>
+                </button>
+              </div>
+            </div>
+            <div className="inward-table-wrap">
+              <table className="inward-table">
+                <thead>
+                  <tr>
+                    <th className="inward-th">Date</th>
+                    <th className="inward-th">Bale No</th>
+                    <th className="inward-th">Fabric</th>
+                    <th className="inward-th">Quality</th>
+                    <th className="inward-th inward-th--center">Pcs</th>
+                    <th className="inward-th inward-th--center">Meter</th>
+                    <th className="inward-th inward-th--center">Rate (₹)</th>
+                    <th className="inward-th inward-th--center">Total (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedInwards.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="inward-td inward-td--empty">
+                        {searchQuery ? `🔍 "${searchQuery}" — koi match nahi mila` : "Koi inward nahi"}
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedInwards.map((inw) => {
+                      const totalMeter = (inw.pcsDetails || []).reduce(
+                        (s, p) => s + (parseFloat(p.meter) || 0), 0
+                      );
+                      const totalAmount = totalMeter * (parseFloat(inw.rate) || 0);
+                      return (
+                        <tr
+                          key={inw._id}
+                          className="inward-tr inward-tr--clickable"
+                          onClick={() => navigate(`/dashboard/inward/${inw._id}`)}
+                          title="Click to edit"
+                        >
+                          <td className="inward-td">
+                            {inw.entryDate
+                              ? new Date(inw.entryDate).toLocaleDateString("en-GB")
+                              : "—"}
+                          </td>
+                          <td className="inward-td">
+                            <strong className="inward-recent-bale">{inw.baleNo || "—"}</strong>
+                          </td>
+                          <td className="inward-td">{inw.fabric?.name || "—"}</td>
+                          <td className="inward-td">{inw.fabricQuality?.name || "—"}</td>
+                          <td className="inward-td inward-td--center">
+                            {(inw.pcsDetails || []).length}
+                          </td>
+                          <td className="inward-td inward-td--center">
+                            {totalMeter.toFixed(2)}
+                          </td>
+                          <td className="inward-td inward-td--center">
+                            {(parseFloat(inw.rate) || 0).toFixed(2)}
+                          </td>
+                          <td className="inward-td inward-td--center">
+                            <strong className="inward-recent-total">
+                              {totalAmount.toFixed(2)}
+                            </strong>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </div>
 
       <style>{`
