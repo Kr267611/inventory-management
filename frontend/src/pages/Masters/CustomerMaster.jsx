@@ -89,6 +89,8 @@ export default function CustomerMaster() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   /* ──────── LOAD CUSTOMERS ──────── */
   const loadCustomers = async () => {
@@ -182,6 +184,10 @@ export default function CustomerMaster() {
   /* ──────── SAVE (API) ──────── */
   const handleSave = async () => {
     if (!form.name.trim()) return alert("Customer Name required hai");
+    if (!form.contactPerson.trim()) return alert("Contact Person required hai");
+    if (!form.phone.trim()) return alert("Phone required hai");
+    if (!form.email.trim()) return alert("Email required hai");
+    if (!form.address.trim()) return alert("Address required hai");
 
     const payload = {
       ...form,
@@ -226,6 +232,22 @@ export default function CustomerMaster() {
     }
   };
 
+  /* ──────── PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
+  // search/filter change hone pe page 1 pe reset
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter]);
+
+  // agar current page range se bahar chala jaaye (delete ke baad)
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
   return (
     <div className="cust-page">
       {/* Header */}
@@ -245,9 +267,9 @@ export default function CustomerMaster() {
 
       {/* Stats */}
       <div className="cust-stats">
-        <StatCard label="Total Customers"   value={stats.total}                hint="All Records"      icon={<Icon.Users />} tone="indigo" />
-        <StatCard label="Active Customers"  value={stats.active}               hint="Currently Active" icon={<Icon.Users />} tone="green"  />
-        <StatCard label="Inactive"          value={stats.inactive}             hint="Deactivated"      icon={<Icon.Users />} tone="gray"   />
+        <StatCard label="Total Customers" value={stats.total} hint="All Records" icon={<Icon.Users />} tone="indigo" />
+        <StatCard label="Active Customers" value={stats.active} hint="Currently Active" icon={<Icon.Users />} tone="green" />
+        <StatCard label="Inactive" value={stats.inactive} hint="Deactivated" icon={<Icon.Users />} tone="gray" />
         <StatCard label="Total Outstanding" value={`₹ ${fmtCurrency(stats.totalOutstanding)}`} hint="Customer Dues" icon={<Icon.Users />} tone="amber" />
       </div>
 
@@ -303,9 +325,9 @@ export default function CustomerMaster() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan="11" className="cust-td--empty">No customers found</td></tr>
               ) : (
-                filtered.map((c, idx) => (
+                paginated.map((c, idx) => (
                   <tr key={c._id} className="cust-tr">
-                    <td>{idx + 1}</td>
+                    <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                     <td className="cust-td--code">{c.code || "-"}</td>
                     <td className="cust-td--name">{c.name}</td>
                     <td>{c.contactPerson || "-"}</td>
@@ -340,14 +362,38 @@ export default function CustomerMaster() {
         </div>
 
         {/* Pagination */}
+        {/* Pagination */}
         <div className="cust-pagination">
           <div className="cust-pagination__info">
-            Showing {filtered.length === 0 ? 0 : 1} to {filtered.length} of {filtered.length} entries
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} entries
           </div>
           <div className="cust-pagination__controls">
-            <button className="cust-page-btn" disabled>Previous</button>
-            <button className="cust-page-btn cust-page-btn--active">1</button>
-            <button className="cust-page-btn" disabled>Next</button>
+            <button
+              className="cust-page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`cust-page-btn ${page === currentPage ? "cust-page-btn--active" : ""}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              className="cust-page-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>
@@ -375,13 +421,13 @@ export default function CustomerMaster() {
           {/* Contact */}
           <section className="cust-form-section">
             <h3 className="cust-form-section__title">Contact Information</h3>
-            <Field label="Contact Person">
+            <Field label="Contact Person" required>
               <input className="cust-input" placeholder="e.g., Rahul Sharma" value={form.contactPerson} onChange={(e) => handleField("contactPerson", e.target.value)} />
             </Field>
-            <Field label="Phone">
+            <Field label="Phone" required>
               <input className="cust-input" placeholder="Enter phone number" value={form.phone} onChange={(e) => handleField("phone", e.target.value)} />
             </Field>
-            <Field label="Email">
+            <Field label="Email" required>
               <input className="cust-input" type="email" placeholder="Enter email address" value={form.email} onChange={(e) => handleField("email", e.target.value)} />
             </Field>
           </section>
@@ -400,7 +446,7 @@ export default function CustomerMaster() {
           {/* Address */}
           <section className="cust-form-section">
             <h3 className="cust-form-section__title">Address</h3>
-            <Field label="Address">
+            <Field label="Address" required>
               <textarea className="cust-input cust-input--textarea" rows="2" placeholder="Enter full address" value={form.address} onChange={(e) => handleField("address", e.target.value)} />
             </Field>
             <div className="cust-row-2">
