@@ -71,6 +71,8 @@ export default function Payment() {
   // 👇 TWO filter states — user types in `filters`, table reads from `appliedFilters`
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
+  const PAGE_SIZE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
   const setFm = (k, v) => setForm({ ...form, [k]: v });
@@ -190,6 +192,16 @@ export default function Payment() {
   const hasActiveFilters = useMemo(() => {
     return JSON.stringify(appliedFilters) !== JSON.stringify(EMPTY_FILTERS);
   }, [appliedFilters]);
+
+  // 🆕 Reset to page 1 whenever the filtered list changes
+  useEffect(() => { setCurrentPage(1); }, [appliedFilters, payments.length]);
+
+  // 🆕 Paginated slice of filteredPayments (10 per page)
+  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / PAGE_SIZE));
+  const paginatedPayments = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredPayments.slice(start, start + PAGE_SIZE);
+  }, [filteredPayments, currentPage]);
 
   /* ──────── PAYMENT MODE SUMMARY (donut chart) ──────── */
   const modeSummary = useMemo(() => {
@@ -525,6 +537,7 @@ export default function Payment() {
               <table className="payment-table">
                 <thead>
                   <tr>
+                    <th>S.No</th>
                     <th>Payment ID</th>
                     <th>Payment Date</th>
                     <th>Customer</th>
@@ -540,14 +553,15 @@ export default function Payment() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={isAdmin() ? 11 : 10} className="payment-td--empty">Loading...</td></tr>
+                    <tr><td colSpan={isAdmin() ? 12 : 11} className="payment-td--empty">Loading...</td></tr>
                   ) : filteredPayments.length === 0 ? (
-                    <tr><td colSpan="11" className="payment-td--empty">
+                    <tr><td colSpan="12" className="payment-td--empty">
                       {hasActiveFilters ? "No payments match these filters" : "No payments found"}
                     </td></tr>
                   ) : (
-                    filteredPayments.map((p) => (
+                    paginatedPayments.map((p, idx) => (
                       <tr key={p._id} className="payment-tr">
+                        <td className="payment-mono payment-muted">{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>
                         <td className="payment-mono">{p.paymentId}</td>
                         <td>{formatDate(p.paymentDate)}</td>
                         <td>{p.customer?.name || "-"}</td>
@@ -582,6 +596,32 @@ export default function Payment() {
                 </tbody>
               </table>
             </div>
+
+            {!loading && filteredPayments.length > 0 && (
+              <div className="payment-pagination">
+                <span className="payment-muted">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <div className="payment-pagination__btns">
+                  <button
+                    type="button"
+                    className="payment-btn payment-btn--ghost"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    className="payment-btn payment-btn--ghost"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </main>
 
@@ -969,6 +1009,14 @@ export default function Payment() {
           margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
         }
         .payment-muted { color: var(--pm-muted); font-size: 13px; }
+
+        .payment-pagination {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-top: 14px; padding-top: 14px;
+          border-top: 1px solid var(--pm-border);
+        }
+        .payment-pagination__btns { display: flex; gap: 8px; }
+        .payment-pagination__btns .payment-btn { padding: 6px 14px; }
 
         .payment-table-wrap { overflow-x: auto; }
         .payment-table { width: 100%; border-collapse: collapse; min-width: 1100px; }
