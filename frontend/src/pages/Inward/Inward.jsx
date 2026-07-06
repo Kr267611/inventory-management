@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { inwardApi } from "../../Api/inwardApi";
 import { fetchAllMasters } from "../../Api/masterApi";
+import InwardBulkImport from "./InwardBulkImport";
 
 /* Inline icons */
 const Icon = {
@@ -82,8 +83,8 @@ const Icon = {
 const generateVoucherNo = async (entryDate) => {
   const date = new Date(entryDate);
   const yyyy = date.getFullYear();
-  const mm   = String(date.getMonth() + 1).padStart(2, "0");
-  const dd   = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
   const prefix = `INW-${yyyy}${mm}${dd}-`;
 
   try {
@@ -136,6 +137,7 @@ export default function InwardEntry() {
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);  // 🆕 Bulk Import modal
 
   /* ──────── FETCH MASTERS + INWARD (if editing) ──────── */
   useEffect(() => {
@@ -160,10 +162,10 @@ export default function InwardEntry() {
         }));
 
         // 🆕 Auto-generate voucher for NEW inward only
-if (!editId) {
-  const newVoucher = await generateVoucherNo(new Date().toISOString().slice(0, 10));
-  setForm((f) => ({ ...f, voucherNo: newVoucher }));
-}
+        if (!editId) {
+          const newVoucher = await generateVoucherNo(new Date().toISOString().slice(0, 10));
+          setForm((f) => ({ ...f, voucherNo: newVoucher }));
+        }
 
         // Agar edit mode hai, existing inward load karo
         if (editId) {
@@ -210,7 +212,7 @@ if (!editId) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId]);
 
-   useEffect(() => {
+  useEffect(() => {
     if (editId) return;                // edit mode: don't auto-change
     if (!form.entryDate) return;
     (async () => {
@@ -479,6 +481,14 @@ if (!editId) {
           </div>
         </div>
         <div className="inward-page__actions">
+          {/* <button className="inward-btn inward-btn--ghost" onClick={() => setShowBulkImport(true)}>
+            <Icon.Save /><span>Bulk Upload</span>
+          </button> */}
+          <InwardBulkImport
+            open={showBulkImport}
+            setOpen={setShowBulkImport}
+            onDone={recentInwards => { }}
+          />
           <button className="inward-btn inward-btn--ghost" onClick={() => navigate("/dashboard/reports/inward-report")}>
             <Icon.ArrowLeft /><span>Back to List</span>
           </button>
@@ -499,7 +509,7 @@ if (!editId) {
         {/* ════════════════════════════════
             🆕 Recent Inward - Auto Hide when user types
             ════════════════════════════════ */}
-  
+
 
         {/* ════════════════════════════════
             🆕 TOP STRIP — Date + Bale No
@@ -769,7 +779,7 @@ if (!editId) {
             </Field>
           </div>
         </section>
-              {!editId && !form.baleNo && pcsDetails.length === 0 && recentInwards.length > 0 && (
+        {!editId && !form.baleNo && pcsDetails.length === 0 && recentInwards.length > 0 && (
           <section className="inward-card inward-recent-card">
             <div className="inward-recent-header">
               <div>
