@@ -84,6 +84,8 @@ export default function PaymentModeMaster() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   /* ──────── LOAD ──────── */
   const loadData = async () => {
@@ -194,6 +196,20 @@ export default function PaymentModeMaster() {
     } catch (err) { alert("Reactivate failed: " + err.message); }
   };
 
+  /* ──────── PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
   return (
     <div className="pm-page">
       {/* Header */}
@@ -264,9 +280,9 @@ export default function PaymentModeMaster() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan="7" className="pm-td--empty">No payment modes found</td></tr>
               ) : (
-                filtered.map((m, idx) => (
+                paginated.map((m, idx) => (
                   <tr key={m._id} className="pm-tr">
-                    <td>{idx + 1}</td>
+                    <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                     <td className="pm-td--name">{m.name}</td>
                     <td className="pm-td--desc">{m.description || "-"}</td>
                     <td>{m.company?.name || "-"}</td>
@@ -296,12 +312,35 @@ export default function PaymentModeMaster() {
 
         <div className="pm-pagination">
           <div className="pm-pagination__info">
-            Showing {filtered.length === 0 ? 0 : 1} to {filtered.length} of {filtered.length} entries
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} entries
           </div>
           <div className="pm-pagination__controls">
-            <button className="pm-page-btn" disabled>Previous</button>
-            <button className="pm-page-btn pm-page-btn--active">1</button>
-            <button className="pm-page-btn" disabled>Next</button>
+            <button
+              className="pm-page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`pm-page-btn ${page === currentPage ? "pm-page-btn--active" : ""}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              className="pm-page-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>

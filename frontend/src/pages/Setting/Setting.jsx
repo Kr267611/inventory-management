@@ -29,6 +29,8 @@ export default function Setting() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   /* ──────── LOAD ──────── */
   const load = async () => {
@@ -64,6 +66,22 @@ export default function Setting() {
     }
     return list;
   }, [users, search, filterRole]);
+
+  /* ──────── PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / ITEMS_PER_PAGE));
+
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredUsers.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredUsers, currentPage]);
+
+  // search/filter change hone pe page 1 pe reset
+  useEffect(() => { setCurrentPage(1); }, [search, filterRole]);
+
+  // agar current page range se bahar chala jaaye (delete ke baad)
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   /* ──────── STATS ──────── */
   const stats = useMemo(() => ({
@@ -219,7 +237,7 @@ export default function Setting() {
                   <td colSpan="6" className="setg-td-empty">No users found</td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => {
+                paginatedUsers.map((user) => {
                   const isMe = user._id === currentUser._id;
                   return (
                     <tr key={user._id} className={isMe ? "setg-tr-self" : ""}>
@@ -266,6 +284,41 @@ export default function Setting() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="setg-pagination">
+          <div className="setg-pagination__info">
+            Showing {filteredUsers.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length} entries
+          </div>
+          <div className="setg-pagination__controls">
+            <button
+              className="setg-page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`setg-page-btn ${page === currentPage ? "setg-page-btn--active" : ""}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              className="setg-page-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 
@@ -414,6 +467,26 @@ const settingsCSS = `
 .setg-tr-self { background: #fef3c7 !important; }
 .setg-tr-self:hover { background: #fde68a !important; }
 .setg-td-empty { text-align: center; color: var(--setg-muted); padding: 40px !important; }
+
+.setg-pagination {
+  padding: 14px 4px 0;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+  border-top: 1px solid var(--setg-border);
+  margin-top: 14px;
+}
+.setg-pagination__info { font-size: 13px; color: var(--setg-muted); }
+.setg-pagination__controls { display: flex; gap: 6px; flex-wrap: wrap; }
+.setg-page-btn {
+  min-width: 32px; padding: 6px 12px;
+  border: 1px solid var(--setg-border);
+  background: #fff; border-radius: 6px;
+  font-size: 13px; cursor: pointer;
+  color: var(--setg-text); font-family: inherit;
+}
+.setg-page-btn:hover:not(:disabled) { background: #f8fafc; }
+.setg-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+.setg-page-btn--active { background: var(--setg-primary); color: #fff; border-color: var(--setg-primary); }
 
 .setg-user { display: flex; align-items: center; gap: 10px; }
 .setg-avatar {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { inventoryApi } from "../../Api/inventoryApi";
 import { fetchAllMasters } from "../../Api/masterApi";
@@ -112,6 +112,8 @@ const [viewBaleModal, setViewBaleModal] = useState(null);   // 🆕 selected bal
   const [masters, setMasters] = useState({
     fabrics: [], qualities: [], colors: [], locations: [],
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
 
@@ -159,6 +161,34 @@ const [viewBaleModal, setViewBaleModal] = useState(null);   // 🆕 selected bal
     setFilters(EMPTY_FILTERS);
     loadInventory(EMPTY_FILTERS);
   };
+
+  /* ──────── PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(inventory.length / ITEMS_PER_PAGE));
+
+  const paginatedInventory = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return inventory.slice(start, start + ITEMS_PER_PAGE);
+  }, [inventory, currentPage]);
+
+  // filters change hone pe page 1 pe reset
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    filters.search,
+    filters.baleNo,
+    filters.fabric,
+    filters.fabricQuality,
+    filters.color,
+    filters.location,
+    filters.stockType,
+    filters.fromDate,
+    filters.toDate,
+  ]);
+
+  // agar current page range se bahar chala jaaye (naya filtered data aane ke baad)
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   /* ──────── VIEW BALE DETAILS ──────── */
 /* ──────── VIEW BALE DETAILS — opens modal ──────── */
@@ -336,7 +366,7 @@ const closeBaleModal = () => setViewBaleModal(null);
               ) : inventory.length === 0 ? (
                 <tr><td colSpan="13" className="inv-td--empty">No bales found</td></tr>
               ) : (
-                inventory.map((r, idx) => {
+                paginatedInventory.map((r, idx) => {
                   // Status compute karo (availablePcs ke base pe)
                   const minStock = r.minStockPcs || 2;
                   const status =
@@ -348,7 +378,7 @@ const closeBaleModal = () => setViewBaleModal(null);
 
                   return (
                     <tr key={r._id} className="inv-tr">
-                      <td>{idx + 1}</td>
+                      <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                       <td>
                         <span className="inv-bale-chip">{r.baleNo}</span>
                       </td>
@@ -393,12 +423,35 @@ const closeBaleModal = () => setViewBaleModal(null);
         {/* Pagination */}
         <div className="inv-pagination">
           <div className="inv-pagination__info">
-            Showing {inventory.length === 0 ? 0 : 1} to {inventory.length} of {inventory.length} bales
+            Showing {inventory.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, inventory.length)} of {inventory.length} bales
           </div>
           <div className="inv-pagination__controls">
-            <button className="inv-page-btn" disabled>Previous</button>
-            <button className="inv-page-btn inv-page-btn--active">1</button>
-            <button className="inv-page-btn" disabled>Next</button>
+            <button
+              className="inv-page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`inv-page-btn ${page === currentPage ? "inv-page-btn--active" : ""}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              className="inv-page-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>

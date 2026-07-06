@@ -86,6 +86,8 @@ export default function CompanyMaster() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   // Load companies on mount
   const loadCompanies = async () => { 
@@ -116,6 +118,22 @@ export default function CompanyMaster() {
       (c.city || "").toLowerCase().includes(q)
     );
   }, [companies, search]);
+
+  /* ──────── PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
+  // search change hone pe page 1 pe reset
+  useEffect(() => { setCurrentPage(1); }, [search]);
+
+  // agar current page range se bahar chala jaaye (delete ke baad)
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   // Body scroll lock + Escape close
   useEffect(() => {
@@ -238,9 +256,9 @@ export default function CompanyMaster() {
   ) : filtered.length === 0 ? (
     <tr><td colSpan="9" className="company-td--empty">No companies found</td></tr>
   ) : (
-    filtered.map((c, idx) => (
+    paginated.map((c, idx) => (
       <tr key={c._id} className="company-tr">
-        <td>{idx + 1}</td>
+        <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
         <td className="company-td--code">{c.code || "-"}</td>
         <td className="company-td--name">{c.name}</td>
         <td>{c.email || "-"}</td>
@@ -265,12 +283,35 @@ export default function CompanyMaster() {
         {/* Pagination */}
         <div className="company-pagination">
           <div className="company-pagination__info">
-            Showing {filtered.length === 0 ? 0 : 1} to {filtered.length} of {filtered.length} entries
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} entries
           </div>
           <div className="company-pagination__controls">
-            <button className="company-page-btn" disabled>Previous</button>
-            <button className="company-page-btn company-page-btn--active">1</button>
-            <button className="company-page-btn" disabled>Next</button>
+            <button
+              className="company-page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`company-page-btn ${page === currentPage ? "company-page-btn--active" : ""}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              className="company-page-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>

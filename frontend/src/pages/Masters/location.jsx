@@ -70,6 +70,8 @@ export default function LocationMaster() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const loadLocations = async () => {
     try {
@@ -92,6 +94,22 @@ export default function LocationMaster() {
     if (!q) return locations;
     return locations.filter((l) => l.name.toLowerCase().includes(q));
   }, [locations, search]);
+
+  /* ──────── PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
+  // search change hone pe page 1 pe reset
+  useEffect(() => { setCurrentPage(1); }, [search]);
+
+  // agar current page range se bahar chala jaaye (delete ke baad)
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -210,9 +228,9 @@ export default function LocationMaster() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan="4" className="location-td--empty">No locations found</td></tr>
               ) : (
-                filtered.map((l, idx) => (
+                paginated.map((l, idx) => (
                   <tr key={l._id} className="location-tr">
-                    <td>{idx + 1}</td>
+                    <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                     <td className="location-td--name">{l.name}</td>
                     <td>{formatDate(l.createdAt)}</td>
                     <td>
@@ -232,12 +250,35 @@ export default function LocationMaster() {
         {/* Pagination */}
         <div className="location-pagination">
           <div className="location-pagination__info">
-            Showing {filtered.length === 0 ? 0 : 1} to {filtered.length} of {filtered.length} entries
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} entries
           </div>
           <div className="location-pagination__controls">
-            <button className="location-page-btn" disabled>Previous</button>
-            <button className="location-page-btn location-page-btn--active">1</button>
-            <button className="location-page-btn" disabled>Next</button>
+            <button
+              className="location-page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`location-page-btn ${page === currentPage ? "location-page-btn--active" : ""}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              className="location-page-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>

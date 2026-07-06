@@ -153,6 +153,8 @@ export default function InwardReport() {
   const [activePreset, setActivePreset] = useState("this_month");
 
   const [viewInwardModal, setViewInwardModal] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
 
@@ -323,6 +325,20 @@ export default function InwardReport() {
     window.print();
   };
 
+  /* ──────── PAGINATION (screen table only — exportCSV/print above keep using filteredInwards) ──────── */
+  const totalPages = Math.max(1, Math.ceil(filteredInwards.length / ITEMS_PER_PAGE));
+
+  const paginatedInwards = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredInwards.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredInwards, currentPage]);
+
+  useEffect(() => { setCurrentPage(1); }, [appliedFilters]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
   const dateRangeLabel = useMemo(() => {
     if (!appliedFilters.fromDate && !appliedFilters.toDate) return "All Time";
     if (appliedFilters.fromDate === appliedFilters.toDate) return formatDate(appliedFilters.fromDate);
@@ -470,7 +486,7 @@ export default function InwardReport() {
             <span className="irpt-muted no-print">{filteredInwards.length} entries</span>
           </div>
 
-          <div className="irpt-table-wrap">
+          <div className="irpt-table-wrap no-print">
             <table className="irpt-table">
               <thead>
                 <tr>
@@ -495,11 +511,11 @@ export default function InwardReport() {
                 ) : filteredInwards.length === 0 ? (
                   <tr><td colSpan="13" className="irpt-td--empty">No inward entries in this period</td></tr>
                 ) : (
-                  filteredInwards.map((i, idx) => {
+                  paginatedInwards.map((i, idx) => {
                     const amount = i.baseCurrencyTotal || ((i.totalMeter || 0) * (i.rate || 0));
                     return (
                       <tr key={i._id}>
-                        <td>{idx + 1}</td>
+                        <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                         <td>{formatDate(i.entryDate || i.createdAt)}</td>
                         <td className="irpt-mono">{i.voucherNo || "-"}</td>
                         <td>{i.baleNo ? <span className="irpt-bale-chip">{i.baleNo}</span> : "-"}</td>{/* 🆕 */}
@@ -538,6 +554,97 @@ export default function InwardReport() {
                 </tfoot>
               )}
             </table>
+          </div>
+
+          {/* Print-only: full unpaginated table so printing always shows every filtered row */}
+          <div className="irpt-table-wrap print-only">
+            <table className="irpt-table">
+              <thead>
+                <tr>
+                  <th>SR No.</th>
+                  <th>Date</th>
+                  <th>Voucher No</th>
+                  <th>Bale No</th>
+                  <th>Supplier</th>
+                  <th>Invoice No</th>
+                  <th>Fabric / Item</th>
+                  <th>Quality</th>
+                  <th className="irpt-th--right">PCS</th>
+                  <th className="irpt-th--right">Meter</th>
+                  <th className="irpt-th--right">Rate</th>
+                  <th className="irpt-th--right">Amount (INR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredInwards.length === 0 ? (
+                  <tr><td colSpan="12" className="irpt-td--empty">No inward entries in this period</td></tr>
+                ) : (
+                  filteredInwards.map((i, idx) => {
+                    const amount = i.baseCurrencyTotal || ((i.totalMeter || 0) * (i.rate || 0));
+                    return (
+                      <tr key={i._id}>
+                        <td>{idx + 1}</td>
+                        <td>{formatDate(i.entryDate || i.createdAt)}</td>
+                        <td className="irpt-mono">{i.voucherNo || "-"}</td>
+                        <td>{i.baleNo ? <span className="irpt-bale-chip">{i.baleNo}</span> : "-"}</td>
+                        <td>{i.supplier?.name || "-"}</td>
+                        <td className="irpt-mono">{i.invoiceNo || "-"}</td>
+                        <td className="irpt-td--strong">{i.fabric?.name || "-"}</td>
+                        <td>{i.fabricQuality?.name || "-"}</td>
+                        <td className="irpt-td--right">{fmtInt(i.totalPcs)}</td>
+                        <td className="irpt-td--right">{fmtNum(i.totalMeter)}</td>
+                        <td className="irpt-td--right">{fmtNum(i.rate)}</td>
+                        <td className="irpt-td--right irpt-td--strong">{fmtNum(amount)}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              {filteredInwards.length > 0 && (
+                <tfoot>
+                  <tr className="irpt-total-row">
+                    <td colSpan="8" className="irpt-td--strong">TOTAL</td>
+                    <td className="irpt-td--right irpt-td--strong">{fmtInt(summary.totalPcs)}</td>
+                    <td className="irpt-td--right irpt-td--strong">{fmtNum(summary.totalMeter)}</td>
+                    <td></td>
+                    <td className="irpt-td--right irpt-td--strong">{fmtNum(summary.totalAmount)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+
+          {/* Pagination — screen only, does not affect export/print (both use filteredInwards above) */}
+          <div className="irpt-pagination no-print">
+            <div className="irpt-pagination__info">
+              Showing {filteredInwards.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+              {Math.min(currentPage * ITEMS_PER_PAGE, filteredInwards.length)} of {filteredInwards.length} entries
+            </div>
+            <div className="irpt-pagination__controls">
+              <button
+                className="irpt-page-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`irpt-page-btn ${page === currentPage ? "irpt-page-btn--active" : ""}`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                className="irpt-page-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -892,6 +999,26 @@ export default function InwardReport() {
           border-top: 2px solid var(--irpt-border);
           border-bottom: none;
         }
+
+        .irpt-pagination {
+          padding: 12px 4px 0;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 12px;
+          border-top: 1px solid var(--irpt-border);
+          margin-top: 14px;
+        }
+        .irpt-pagination__info { font-size: 13px; color: var(--irpt-muted); }
+        .irpt-pagination__controls { display: flex; gap: 6px; flex-wrap: wrap; }
+        .irpt-page-btn {
+          min-width: 32px; padding: 6px 12px;
+          border: 1px solid var(--irpt-border);
+          background: #fff; border-radius: 6px;
+          font-size: 13px; cursor: pointer;
+          color: var(--irpt-text); font-family: inherit;
+        }
+        .irpt-page-btn:hover:not(:disabled) { background: #f8fafc; }
+        .irpt-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+        .irpt-page-btn--active { background: var(--irpt-primary); color: #fff; border-color: var(--irpt-primary); }
 
         /* 🆕 MODAL */
 .irpt-modal-overlay {

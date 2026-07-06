@@ -93,6 +93,8 @@ export default function SalesReport() {
   const [appliedFilters, setAppliedFilters] = useState({ ...EMPTY_FILTERS, ...getPresetRange("this_month") });
   const [activePreset, setActivePreset] = useState("this_month");
   const [viewSaleModal, setViewSaleModal] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
 
@@ -264,6 +266,20 @@ export default function SalesReport() {
     URL.revokeObjectURL(url);
   };
 
+  /* PAGINATION (screen table only — exportCSV above keeps using filteredSales) */
+  const totalPages = Math.max(1, Math.ceil(filteredSales.length / ITEMS_PER_PAGE));
+
+  const paginatedSales = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredSales.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredSales, currentPage]);
+
+  useEffect(() => { setCurrentPage(1); }, [appliedFilters]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
   const dateRangeLabel = useMemo(() => {
     if (!appliedFilters.fromDate && !appliedFilters.toDate) return "All Time";
     if (appliedFilters.fromDate === appliedFilters.toDate) return formatDate(appliedFilters.fromDate);
@@ -409,7 +425,7 @@ export default function SalesReport() {
             <span className="srpt-muted no-print">{filteredSales.length} sales</span>
           </div>
 
-          <div className="srpt-table-wrap">
+          <div className="srpt-table-wrap no-print">
             <table className="srpt-table">
               <thead>
                 <tr>
@@ -434,9 +450,9 @@ export default function SalesReport() {
                 ) : filteredSales.length === 0 ? (
                   <tr><td colSpan="13" className="srpt-td--empty">No sales in this period</td></tr>
                 ) : (
-                  filteredSales.map((s, idx) => (
+                  paginatedSales.map((s, idx) => (
                     <tr key={s._id}>
-                      <td>{idx + 1}</td>
+                      <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                       <td>{formatDate(s.saleDate || s.createdAt)}</td>
                       <td className="srpt-mono">{s.invoiceNo || "-"}</td>
                       {/* 🆕 Bales cell — multiple chips */}
@@ -500,6 +516,119 @@ export default function SalesReport() {
                 </tfoot>
               )}
             </table>
+          </div>
+
+          {/* Print-only: full unpaginated table so printing always shows every filtered row */}
+          <div className="srpt-table-wrap print-only">
+            <table className="srpt-table">
+              <thead>
+                <tr>
+                  <th>SR No.</th>
+                  <th>Date</th>
+                  <th>Invoice No</th>
+                  <th>Bales</th>
+                  <th>Customer</th>
+                  <th>Sales Person</th>
+                  <th className="srpt-th--right">PCS</th>
+                  <th className="srpt-th--right">Meter</th>
+                  <th className="srpt-th--right">Net Amount</th>
+                  <th className="srpt-th--right">Paid</th>
+                  <th className="srpt-th--right">Balance</th>
+                  <th className="srpt-th--center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSales.length === 0 ? (
+                  <tr><td colSpan="12" className="srpt-td--empty">No sales in this period</td></tr>
+                ) : (
+                  filteredSales.map((s, idx) => (
+                    <tr key={s._id}>
+                      <td>{idx + 1}</td>
+                      <td>{formatDate(s.saleDate || s.createdAt)}</td>
+                      <td className="srpt-mono">{s.invoiceNo || "-"}</td>
+                      <td>
+                        {(() => {
+                          const bales = [...new Set((s.items || []).map((it) => it.baleNo).filter(Boolean))];
+                          if (bales.length === 0) return <span className="srpt-muted">-</span>;
+                          return (
+                            <div className="srpt-bales-list">
+                              {bales.slice(0, 3).map((b) => (
+                                <span key={b} className="srpt-bale-chip">{b}</span>
+                              ))}
+                              {bales.length > 3 && (
+                                <span className="srpt-bale-more" title={bales.slice(3).join(", ")}>
+                                  +{bales.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td className="srpt-td--strong">{s.customer?.name || "-"}</td>
+                      <td>{s.salesPerson?.name || "-"}</td>
+                      <td className="srpt-td--right">{fmtInt(s.totalPcs)}</td>
+                      <td className="srpt-td--right">{fmtNum(s.totalMeter)}</td>
+                      <td className="srpt-td--right srpt-td--strong">{fmtNum(s.netAmount)}</td>
+                      <td className="srpt-td--right srpt-paid">{fmtNum(s.paidAmount)}</td>
+                      <td className={`srpt-td--right ${(s.balanceDue || 0) > 0 ? "srpt-balance-due" : "srpt-balance-zero"}`}>
+                        {fmtNum(s.balanceDue)}
+                      </td>
+                      <td className="srpt-td--center">
+                        <span className={`srpt-badge srpt-badge--${(s.paymentStatus || "unpaid").toLowerCase()}`}>
+                          {s.paymentStatus || "Unpaid"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {filteredSales.length > 0 && (
+                <tfoot>
+                  <tr className="srpt-total-row">
+                    <td colSpan="6" className="srpt-td--strong">TOTAL</td>
+                    <td className="srpt-td--right srpt-td--strong">{fmtInt(summary.totalPcs)}</td>
+                    <td className="srpt-td--right srpt-td--strong">{fmtNum(summary.totalMeter)}</td>
+                    <td className="srpt-td--right srpt-td--strong">{fmtNum(summary.totalAmount)}</td>
+                    <td className="srpt-td--right srpt-td--strong srpt-paid">{fmtNum(summary.totalPaid)}</td>
+                    <td className="srpt-td--right srpt-td--strong srpt-balance-due">{fmtNum(summary.totalOutstanding)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+
+          {/* Pagination — screen only, does not affect export/print (both use filteredSales above) */}
+          <div className="srpt-pagination no-print">
+            <div className="srpt-pagination__info">
+              Showing {filteredSales.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+              {Math.min(currentPage * ITEMS_PER_PAGE, filteredSales.length)} of {filteredSales.length} entries
+            </div>
+            <div className="srpt-pagination__controls">
+              <button
+                className="srpt-page-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`srpt-page-btn ${page === currentPage ? "srpt-page-btn--active" : ""}`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                className="srpt-page-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -879,6 +1008,26 @@ export default function SalesReport() {
           border-top: 2px solid var(--srpt-border);
           border-bottom: none;
         }
+
+        .srpt-pagination {
+          padding: 12px 4px 0;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 12px;
+          border-top: 1px solid var(--srpt-border);
+          margin-top: 14px;
+        }
+        .srpt-pagination__info { font-size: 13px; color: var(--srpt-muted); }
+        .srpt-pagination__controls { display: flex; gap: 6px; flex-wrap: wrap; }
+        .srpt-page-btn {
+          min-width: 32px; padding: 6px 12px;
+          border: 1px solid var(--srpt-border);
+          background: #fff; border-radius: 6px;
+          font-size: 13px; cursor: pointer;
+          color: var(--srpt-text); font-family: inherit;
+        }
+        .srpt-page-btn:hover:not(:disabled) { background: #f8fafc; }
+        .srpt-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+        .srpt-page-btn--active { background: var(--srpt-primary); color: #fff; border-color: var(--srpt-primary); }
 
         /* 🆕 MODAL */
 .srpt-modal-overlay {

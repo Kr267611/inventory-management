@@ -74,6 +74,8 @@ export default function DesignMaster() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const loadDesigns = async () => {
     try {
@@ -96,6 +98,22 @@ export default function DesignMaster() {
     if (!q) return designs;
     return designs.filter((d) => d.name.toLowerCase().includes(q));
   }, [designs, search]);
+
+  /* ──────── PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
+  // search change hone pe page 1 pe reset
+  useEffect(() => { setCurrentPage(1); }, [search]);
+
+  // agar current page range se bahar chala jaaye (delete ke baad)
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -215,9 +233,9 @@ export default function DesignMaster() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan="4" className="design-td--empty">No designs found</td></tr>
               ) : (
-                filtered.map((d, idx) => (
+                paginated.map((d, idx) => (
                   <tr key={d._id} className="design-tr">
-                    <td>{idx + 1}</td>
+                    <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                     <td className="design-td--name">{d.designNo}</td>
                     <td>{formatDate(d.createdAt)}</td>
                     <td>
@@ -238,12 +256,35 @@ export default function DesignMaster() {
         {/* Pagination */}
         <div className="design-pagination">
           <div className="design-pagination__info">
-            Showing {filtered.length === 0 ? 0 : 1} to {filtered.length} of {filtered.length} entries
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} entries
           </div>
           <div className="design-pagination__controls">
-            <button className="design-page-btn" disabled>Previous</button>
-            <button className="design-page-btn design-page-btn--active">1</button>
-            <button className="design-page-btn" disabled>Next</button>
+            <button
+              className="design-page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`design-page-btn ${page === currentPage ? "design-page-btn--active" : ""}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              className="design-page-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>

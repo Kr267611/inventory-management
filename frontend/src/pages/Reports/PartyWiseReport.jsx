@@ -114,6 +114,8 @@ export default function PartyWiseReport() {
 
   const [detailModal, setDetailModal] = useState(null);
   const [printMode, setPrintMode] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
 
@@ -376,6 +378,20 @@ export default function PartyWiseReport() {
     URL.revokeObjectURL(url);
   };
 
+  /* PAGINATION (screen table only) */
+  const totalPages = Math.max(1, Math.ceil(filteredLedger.length / ITEMS_PER_PAGE));
+
+  const paginatedLedger = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredLedger.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredLedger, currentPage]);
+
+  useEffect(() => { setCurrentPage(1); }, [appliedFilters, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
   const dateRangeLabel = useMemo(() => {
     if (!appliedFilters.fromDate && !appliedFilters.toDate) return "All Time";
     if (appliedFilters.fromDate === appliedFilters.toDate) return formatDate(appliedFilters.fromDate);
@@ -630,7 +646,7 @@ export default function PartyWiseReport() {
             <span className="pwrpt-muted no-print">{filteredLedger.length} parties</span>
           </div>
 
-          <div className="pwrpt-table-wrap">
+          <div className="pwrpt-table-wrap no-print">
             <table className="pwrpt-table">
               <thead>
                 <tr>
@@ -653,9 +669,9 @@ export default function PartyWiseReport() {
                 ) : filteredLedger.length === 0 ? (
                   <tr><td colSpan="11" className="pwrpt-td--empty">No party activity in this period</td></tr>
                 ) : (
-                  filteredLedger.map((l, idx) => (
+                  paginatedLedger.map((l, idx) => (
                     <tr key={l.customer._id}>
-                      <td>{idx + 1}</td>
+                      <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                       <td className="pwrpt-td--strong">{l.customer.name}</td>
                       <td className="pwrpt-mono">{l.customer.code || "-"}</td>
                       <td className="pwrpt-muted">{l.customer.phone || "-"}</td>
@@ -695,6 +711,98 @@ export default function PartyWiseReport() {
                 </tfoot>
               )}
             </table>
+          </div>
+
+          {/* Print-only: full unpaginated table so printing always shows every filtered row */}
+          <div className="pwrpt-table-wrap print-only">
+            <table className="pwrpt-table">
+              <thead>
+                <tr>
+                  <th>SR No.</th>
+                  <th>Customer</th>
+                  <th>Code</th>
+                  <th>Phone</th>
+                  <th className="pwrpt-th--right">Invoices</th>
+                  <th className="pwrpt-th--right">Total Sales</th>
+                  <th className="pwrpt-th--right">Paid</th>
+                  <th className="pwrpt-th--right">Outstanding</th>
+                  <th>Last Activity</th>
+                  <th className="pwrpt-th--center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLedger.length === 0 ? (
+                  <tr><td colSpan="10" className="pwrpt-td--empty">No party activity in this period</td></tr>
+                ) : (
+                  filteredLedger.map((l, idx) => (
+                    <tr key={l.customer._id}>
+                      <td>{idx + 1}</td>
+                      <td className="pwrpt-td--strong">{l.customer.name}</td>
+                      <td className="pwrpt-mono">{l.customer.code || "-"}</td>
+                      <td className="pwrpt-muted">{l.customer.phone || "-"}</td>
+                      <td className="pwrpt-td--right">{fmtInt(l.totalInvoices)}</td>
+                      <td className="pwrpt-td--right">{fmtNum(l.totalSalesAmount)}</td>
+                      <td className="pwrpt-td--right pwrpt-paid">{fmtNum(l.totalPaid)}</td>
+                      <td className={`pwrpt-td--right ${l.outstanding > 0 ? "pwrpt-balance-due" : "pwrpt-balance-zero"}`}>
+                        {fmtNum(l.outstanding)}
+                      </td>
+                      <td>{l.lastActivity ? formatDate(l.lastActivity) : "-"}</td>
+                      <td className="pwrpt-td--center">
+                        <span className={`pwrpt-badge pwrpt-badge--${l.status}`}>
+                          {l.status === "cleared" && "✓ Cleared"}
+                          {l.status === "outstanding" && "Due"}
+                          {l.status === "overdue" && "⚠ Overdue"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {filteredLedger.length > 0 && (
+                <tfoot>
+                  <tr className="pwrpt-total-row">
+                    <td colSpan="5" className="pwrpt-td--strong">TOTAL</td>
+                    <td className="pwrpt-td--right pwrpt-td--strong">{fmtNum(summary.totalSales)}</td>
+                    <td className="pwrpt-td--right pwrpt-td--strong pwrpt-paid">{fmtNum(summary.totalCollected)}</td>
+                    <td className="pwrpt-td--right pwrpt-td--strong pwrpt-balance-due">{fmtNum(summary.totalOutstanding)}</td>
+                    <td></td><td></td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+
+          {/* Pagination — screen only, does not affect export/print (both use filteredLedger above) */}
+          <div className="pwrpt-pagination no-print">
+            <div className="pwrpt-pagination__info">
+              Showing {filteredLedger.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+              {Math.min(currentPage * ITEMS_PER_PAGE, filteredLedger.length)} of {filteredLedger.length} entries
+            </div>
+            <div className="pwrpt-pagination__controls">
+              <button
+                className="pwrpt-page-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`pwrpt-page-btn ${page === currentPage ? "pwrpt-page-btn--active" : ""}`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                className="pwrpt-page-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -865,6 +973,26 @@ export default function PartyWiseReport() {
         .pwrpt-badge--overdue     { background: #fee2e2; color: #b91c1c; }
 
         .pwrpt-total-row td { background: #f8fafc; padding: 14px 12px; font-size: 13px; border-top: 2px solid var(--pwrpt-border); border-bottom: none; }
+
+        .pwrpt-pagination {
+          padding: 12px 4px 0;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 12px;
+          border-top: 1px solid var(--pwrpt-border);
+          margin-top: 14px;
+        }
+        .pwrpt-pagination__info { font-size: 13px; color: var(--pwrpt-muted); }
+        .pwrpt-pagination__controls { display: flex; gap: 6px; flex-wrap: wrap; }
+        .pwrpt-page-btn {
+          min-width: 32px; padding: 6px 12px;
+          border: 1px solid var(--pwrpt-border);
+          background: #fff; border-radius: 6px;
+          font-size: 13px; cursor: pointer;
+          color: var(--pwrpt-text); font-family: inherit;
+        }
+        .pwrpt-page-btn:hover:not(:disabled) { background: #f8fafc; }
+        .pwrpt-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+        .pwrpt-page-btn--active { background: var(--pwrpt-primary); color: #fff; border-color: var(--pwrpt-primary); }
 
         /* MODAL */
         .pwrpt-modal-overlay {

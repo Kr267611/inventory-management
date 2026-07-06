@@ -88,6 +88,8 @@ export default function TransportMaster() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   /* ──────── LOAD ──────── */
   const loadData = async () => {
@@ -197,6 +199,20 @@ export default function TransportMaster() {
     } catch (err) { alert("Reactivate failed: " + err.message); }
   };
 
+  /* ──────── PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
   return (
     <div className="trn-page">
       {/* Header */}
@@ -269,9 +285,9 @@ export default function TransportMaster() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan="9" className="trn-td--empty">No transporters found</td></tr>
               ) : (
-                filtered.map((t, idx) => (
+                paginated.map((t, idx) => (
                   <tr key={t._id} className="trn-tr">
-                    <td>{idx + 1}</td>
+                    <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                     <td className="trn-td--code">{t.code || "-"}</td>
                     <td className="trn-td--name">{t.name}</td>
                     <td>{t.vehicleNo ? <span className="trn-vehicle-chip">{t.vehicleNo}</span> : "-"}</td>
@@ -303,12 +319,35 @@ export default function TransportMaster() {
 
         <div className="trn-pagination">
           <div className="trn-pagination__info">
-            Showing {filtered.length === 0 ? 0 : 1} to {filtered.length} of {filtered.length} entries
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} entries
           </div>
           <div className="trn-pagination__controls">
-            <button className="trn-page-btn" disabled>Previous</button>
-            <button className="trn-page-btn trn-page-btn--active">1</button>
-            <button className="trn-page-btn" disabled>Next</button>
+            <button
+              className="trn-page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`trn-page-btn ${page === currentPage ? "trn-page-btn--active" : ""}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              className="trn-page-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>

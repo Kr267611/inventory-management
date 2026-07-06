@@ -86,6 +86,8 @@ export default function SalesPersonMaster() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   /* ──────── LOAD ──────── */
   const loadData = async () => {
@@ -201,6 +203,20 @@ export default function SalesPersonMaster() {
     } catch (err) { alert("Reactivate failed: " + err.message); }
   };
 
+  /* ──────── PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
   return (
     <div className="sper-page">
       {/* Header */}
@@ -273,9 +289,9 @@ export default function SalesPersonMaster() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan="9" className="sper-td--empty">No sales persons found</td></tr>
               ) : (
-                filtered.map((p, idx) => (
+                paginated.map((p, idx) => (
                   <tr key={p._id} className="sper-tr">
-                    <td>{idx + 1}</td>
+                    <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                     <td className="sper-td--code">{p.code || "-"}</td>
                     <td className="sper-td--name">{p.name}</td>
                     <td><span className="sper-role-chip">{p.role || "Sales"}</span></td>
@@ -307,12 +323,35 @@ export default function SalesPersonMaster() {
 
         <div className="sper-pagination">
           <div className="sper-pagination__info">
-            Showing {filtered.length === 0 ? 0 : 1} to {filtered.length} of {filtered.length} entries
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} entries
           </div>
           <div className="sper-pagination__controls">
-            <button className="sper-page-btn" disabled>Previous</button>
-            <button className="sper-page-btn sper-page-btn--active">1</button>
-            <button className="sper-page-btn" disabled>Next</button>
+            <button
+              className="sper-page-btn"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                className={`sper-page-btn ${page === currentPage ? "sper-page-btn--active" : ""}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              className="sper-page-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>

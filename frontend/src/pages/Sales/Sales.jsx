@@ -92,6 +92,8 @@ export default function Sales() {
   const [recentSales, setRecentSales] = useState([]);        // 🆕
   const [totalSales, setTotalSales] = useState(0);            // 🆕
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);   // 🆕 pagination
+  const ITEMS_PER_PAGE = 10;
   const [masters, setMasters] = useState({
     customers: [], companies: [], locations: [], fabrics: [],
     qualities: [], colors: [], salesPersons: [], transports: [],
@@ -301,7 +303,7 @@ export default function Sales() {
   /* 🆕 ──────── FILTERED RECENT SALES ──────── */
   const displayedSales = useMemo(() => {
     if (!searchQuery.trim()) {
-      return recentSales.slice(0, 10);   // default: last 10
+      return recentSales;
     }
     const q = searchQuery.toLowerCase().trim();
     return recentSales.filter((s) =>
@@ -310,6 +312,22 @@ export default function Sales() {
       (s.items || []).some((it) => (it.baleNo || "").toLowerCase().includes(q))
     );
   }, [recentSales, searchQuery]);
+
+  /* 🆕 ──────── PAGINATION (Recent Sales table) ──────── */
+  const totalPages = Math.max(1, Math.ceil(displayedSales.length / ITEMS_PER_PAGE));
+
+  const paginatedSales = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return displayedSales.slice(start, start + ITEMS_PER_PAGE);
+  }, [displayedSales, currentPage]);
+
+  // search change hone pe page 1 pe reset
+  useEffect(() => { setCurrentPage(1); }, [searchQuery]);
+
+  // agar current page range se bahar chala jaaye
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
 
   const summary = useMemo(() => {
@@ -987,7 +1005,7 @@ export default function Sales() {
                         </td>
                       </tr>
                     ) : (
-                      displayedSales.map((s) => {
+                      paginatedSales.map((s) => {
                         const totalPcs = (s.items || []).reduce((sum, it) => sum + (it.pcs || 0), 0);
                         const totalMeter = (s.items || []).reduce((sum, it) => sum + (it.totalMeter || 0), 0);
                         const baleList = (s.items || []).map((it) => it.baleNo).filter(Boolean).join(", ");
@@ -1025,6 +1043,41 @@ export default function Sales() {
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* 🆕 Pagination */}
+              <div className="sales-pagination">
+                <div className="sales-pagination__info">
+                  Showing {displayedSales.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+                  {Math.min(currentPage * ITEMS_PER_PAGE, displayedSales.length)} of {displayedSales.length} entries
+                </div>
+                <div className="sales-pagination__controls">
+                  <button
+                    className="sales-page-btn"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      className={`sales-page-btn ${page === currentPage ? "sales-page-btn--active" : ""}`}
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </button>
+                  ))}
+
+                  <button
+                    className="sales-page-btn"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </section>
           )}
@@ -1433,6 +1486,24 @@ export default function Sales() {
 
         .sales-pagination__info { margin-top: 12px; font-size: 13px; color: var(--sl-muted); }
 
+        .sales-pagination {
+          margin-top: 12px;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 12px;
+        }
+        .sales-pagination .sales-pagination__info { margin-top: 0; }
+        .sales-pagination__controls { display: flex; gap: 6px; flex-wrap: wrap; }
+        .sales-page-btn {
+          min-width: 32px; padding: 6px 12px;
+          border: 1px solid var(--sl-border);
+          background: #fff; border-radius: 6px;
+          font-size: 13px; cursor: pointer;
+          color: var(--sl-text); font-family: inherit;
+        }
+        .sales-page-btn:hover:not(:disabled) { background: #f8fafc; }
+        .sales-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+        .sales-page-btn--active { background: var(--sl-primary); color: #fff; border-color: var(--sl-primary); }
+
         .sales-note {
           background: #eff6ff; border: 1px solid #bfdbfe;
           border-radius: 10px; padding: 14px 18px;
@@ -1485,6 +1556,8 @@ export default function Sales() {
           .sales-summary-grid { grid-template-columns: 1fr 1fr; }
           .sales-page__actions { width: 100%; }
           .sales-page__actions .sales-btn { flex: 1; justify-content: center; }
+          .sales-pagination { justify-content: center; }
+          .sales-pagination .sales-pagination__info { text-align: center; width: 100%; }
         }
       `}</style>
     </div>

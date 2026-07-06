@@ -59,6 +59,8 @@ export default function InvReport() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
   const [statusChip, setStatusChip] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
 
@@ -207,6 +209,20 @@ export default function InvReport() {
     URL.revokeObjectURL(url);
   };
 
+  /* ──────── PAGINATION (screen table only — exportCSV/print above keep using filteredInventory) ──────── */
+  const totalPages = Math.max(1, Math.ceil(filteredInventory.length / ITEMS_PER_PAGE));
+
+  const paginatedInventory = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredInventory.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredInventory, currentPage]);
+
+  useEffect(() => { setCurrentPage(1); }, [appliedFilters, statusChip]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
   return (
     <div className="invrpt-page">
       {/* HEADER */}
@@ -342,7 +358,7 @@ export default function InvReport() {
             <span className="invrpt-muted no-print">{filteredInventory.length} items</span>
           </div>
 
-          <div className="invrpt-table-wrap">
+          <div className="invrpt-table-wrap no-print">
             <table className="invrpt-table">
               <thead>
                 <tr>
@@ -365,7 +381,7 @@ export default function InvReport() {
                 ) : filteredInventory.length === 0 ? (
                   <tr><td colSpan="11" className="invrpt-td--empty">No inventory matches these filters</td></tr>
                 ) : (
-                  filteredInventory.map((i, idx) => {
+                  paginatedInventory.map((i, idx) => {
                     const status = getStatus(i);
                     const statusClass = status.toLowerCase().replace(/ /g, "-");
                     const avail = i.availablePcs ?? 0;
@@ -373,7 +389,7 @@ export default function InvReport() {
                     const sold = Math.max(total - avail, 0);
                     return (
                       <tr key={i._id}>
-                        <td>{idx + 1}</td>
+                        <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                         <td>{i.baleNo ? <span className="invrpt-bale-chip">{i.baleNo}</span> : "-"}</td>{/* 🆕 */}
                         <td className="invrpt-td--strong">{i.fabric?.name || "-"}</td>
                         <td>{i.fabricQuality?.name || "-"}</td>
@@ -409,6 +425,107 @@ export default function InvReport() {
                 </tfoot>
               )}
             </table>
+          </div>
+
+          {/* Print-only: full unpaginated table so printing always shows every filtered row */}
+          <div className="invrpt-table-wrap print-only">
+            <table className="invrpt-table">
+              <thead>
+                <tr>
+                  <th>SR No.</th>
+                  <th>Bale No</th>
+                  <th>Fabric / Item</th>
+                  <th>Quality</th>
+                  <th>Color</th>
+                  <th>Location</th>
+                  <th className="invrpt-th--right">PCS (Avail/Total)</th>
+                  <th className="invrpt-th--right">Avail. Meter</th>
+                  <th className="invrpt-th--right">Rate</th>
+                  <th className="invrpt-th--right">Total Value</th>
+                  <th className="invrpt-th--center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredInventory.length === 0 ? (
+                  <tr><td colSpan="11" className="invrpt-td--empty">No inventory matches these filters</td></tr>
+                ) : (
+                  filteredInventory.map((i, idx) => {
+                    const status = getStatus(i);
+                    const statusClass = status.toLowerCase().replace(/ /g, "-");
+                    const avail = i.availablePcs ?? 0;
+                    const total = i.totalPcs ?? 0;
+                    const sold = Math.max(total - avail, 0);
+                    return (
+                      <tr key={i._id}>
+                        <td>{idx + 1}</td>
+                        <td>{i.baleNo ? <span className="invrpt-bale-chip">{i.baleNo}</span> : "-"}</td>
+                        <td className="invrpt-td--strong">{i.fabric?.name || "-"}</td>
+                        <td>{i.fabricQuality?.name || "-"}</td>
+                        <td>{i.color?.name || "-"}</td>
+                        <td>{i.location?.name || "-"}</td>
+                        <td className="invrpt-td--right">
+                          <span className="invrpt-pcs-avail">{fmtInt(avail)}</span>
+                          <span className="invrpt-pcs-sep"> / </span>
+                          <span className="invrpt-pcs-total">{fmtInt(total)}</span>
+                          {sold > 0 && <div className="invrpt-pcs-sold">{sold} sold</div>}
+                        </td>
+                        <td className="invrpt-td--right">{fmtNum(i.availableMeter)}</td>
+                        <td className="invrpt-td--right">{fmtNum(i.rate)}</td>
+                        <td className="invrpt-td--right invrpt-td--strong">{fmtNum(i.totalValue)}</td>
+                        <td className="invrpt-td--center">
+                          <span className={`invrpt-badge invrpt-badge--${statusClass}`}>{status}</span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              {filteredInventory.length > 0 && (
+                <tfoot>
+                  <tr className="invrpt-total-row">
+                    <td colSpan="6" className="invrpt-td--strong">TOTAL</td>
+                    <td className="invrpt-td--right invrpt-td--strong">{fmtInt(summary.totalPcs)}</td>
+                    <td className="invrpt-td--right invrpt-td--strong">{fmtNum(summary.totalMeter)}</td>
+                    <td></td>
+                    <td className="invrpt-td--right invrpt-td--strong">{fmtNum(summary.totalValue)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+
+          {/* Pagination — screen only, does not affect export/print (both use filteredInventory above) */}
+          <div className="invrpt-pagination no-print">
+            <div className="invrpt-pagination__info">
+              Showing {filteredInventory.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+              {Math.min(currentPage * ITEMS_PER_PAGE, filteredInventory.length)} of {filteredInventory.length} entries
+            </div>
+            <div className="invrpt-pagination__controls">
+              <button
+                className="invrpt-page-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`invrpt-page-btn ${page === currentPage ? "invrpt-page-btn--active" : ""}`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                className="invrpt-page-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -613,6 +730,26 @@ export default function InvReport() {
           border-top: 2px solid var(--invrpt-border);
           border-bottom: none;
         }
+
+        .invrpt-pagination {
+          padding: 12px 4px 0;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 12px;
+          border-top: 1px solid var(--invrpt-border);
+          margin-top: 14px;
+        }
+        .invrpt-pagination__info { font-size: 13px; color: var(--invrpt-muted); }
+        .invrpt-pagination__controls { display: flex; gap: 6px; flex-wrap: wrap; }
+        .invrpt-page-btn {
+          min-width: 32px; padding: 6px 12px;
+          border: 1px solid var(--invrpt-border);
+          background: #fff; border-radius: 6px;
+          font-size: 13px; cursor: pointer;
+          color: var(--invrpt-text); font-family: inherit;
+        }
+        .invrpt-page-btn:hover:not(:disabled) { background: #f8fafc; }
+        .invrpt-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+        .invrpt-page-btn--active { background: var(--invrpt-primary); color: #fff; border-color: var(--invrpt-primary); }
 
         @media (max-width: 1400px) {
           .invrpt-stats { grid-template-columns: repeat(3, 1fr); }

@@ -92,6 +92,8 @@ export default function PaymentReport() {
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS, ...getPresetRange("this_month") });
   const [appliedFilters, setAppliedFilters] = useState({ ...EMPTY_FILTERS, ...getPresetRange("this_month") });
   const [activePreset, setActivePreset] = useState("this_month");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const setF = (k, v) => setFilters({ ...filters, [k]: v });
 
@@ -259,6 +261,20 @@ export default function PaymentReport() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+
+  /* PAGINATION (screen table only — exportCSV above keeps using filteredPayments) */
+  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / ITEMS_PER_PAGE));
+
+  const paginatedPayments = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredPayments.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredPayments, currentPage]);
+
+  useEffect(() => { setCurrentPage(1); }, [appliedFilters]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   const dateRangeLabel = useMemo(() => {
     if (!appliedFilters.fromDate && !appliedFilters.toDate) return "All Time";
@@ -438,7 +454,7 @@ export default function PaymentReport() {
             <span className="prpt-muted no-print">{filteredPayments.length} payments</span>
           </div>
 
-          <div className="prpt-table-wrap">
+          <div className="prpt-table-wrap no-print">
             <table className="prpt-table">
               <thead>
                 <tr>
@@ -459,6 +475,66 @@ export default function PaymentReport() {
                 {loading ? (
                   <tr><td colSpan="11" className="prpt-td--empty">Loading...</td></tr>
                 ) : filteredPayments.length === 0 ? (
+                  <tr><td colSpan="11" className="prpt-td--empty">No payments in this period</td></tr>
+                ) : (
+                  paginatedPayments.map((p, idx) => (
+                    <tr key={p._id}>
+                      <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
+                      <td className="prpt-mono">{p.paymentId || "-"}</td>
+                      <td>{formatDate(p.paymentDate || p.createdAt)}</td>
+                      <td className="prpt-td--strong">{p.customer?.name || "-"}</td>
+                      <td className="prpt-mono">{p.sale?.invoiceNo || "-"}</td>
+                      <td>
+                        <span className="prpt-mode-chip">{p.paymentMode?.name || "-"}</span>
+                      </td>
+                      <td className="prpt-mono prpt-muted">{p.referenceNo || "-"}</td>
+                      <td className="prpt-td--right">{fmtNum(p.outstandingBefore)}</td>
+                      <td className="prpt-td--right prpt-received">{fmtNum(p.amountReceived)}</td>
+                      <td className={`prpt-td--right ${(p.outstandingAfter || 0) > 0 ? "prpt-balance-due" : "prpt-balance-zero"}`}>
+                        {fmtNum(p.outstandingAfter)}
+                      </td>
+                      <td className="prpt-td--center">
+                        <span className={`prpt-badge prpt-badge--${(p.status || "partial").toLowerCase()}`}>
+                          {p.status || "-"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {filteredPayments.length > 0 && (
+                <tfoot>
+                  <tr className="prpt-total-row">
+                    <td colSpan="8" className="prpt-td--strong">TOTAL</td>
+                    <td className="prpt-td--right prpt-td--strong prpt-received">{fmtNum(summary.totalReceived)}</td>
+                    <td className="prpt-td--right prpt-td--strong prpt-balance-due">{fmtNum(summary.totalOutstandingAfter)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+
+          {/* Print-only: full unpaginated table so printing always shows every filtered row */}
+          <div className="prpt-table-wrap print-only">
+            <table className="prpt-table">
+              <thead>
+                <tr>
+                  <th>SR No.</th>
+                  <th>Payment ID</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Invoice No</th>
+                  <th>Mode</th>
+                  <th>Reference</th>
+                  <th className="prpt-th--right">Outstanding Before</th>
+                  <th className="prpt-th--right">Received</th>
+                  <th className="prpt-th--right">Outstanding After</th>
+                  <th className="prpt-th--center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPayments.length === 0 ? (
                   <tr><td colSpan="11" className="prpt-td--empty">No payments in this period</td></tr>
                 ) : (
                   filteredPayments.map((p, idx) => (
@@ -497,6 +573,39 @@ export default function PaymentReport() {
                 </tfoot>
               )}
             </table>
+          </div>
+
+          {/* Pagination — screen only, does not affect export/print (both use filteredPayments above) */}
+          <div className="prpt-pagination no-print">
+            <div className="prpt-pagination__info">
+              Showing {filteredPayments.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+              {Math.min(currentPage * ITEMS_PER_PAGE, filteredPayments.length)} of {filteredPayments.length} entries
+            </div>
+            <div className="prpt-pagination__controls">
+              <button
+                className="prpt-page-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`prpt-page-btn ${page === currentPage ? "prpt-page-btn--active" : ""}`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                className="prpt-page-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -700,6 +809,26 @@ export default function PaymentReport() {
           border-top: 2px solid var(--prpt-border);
           border-bottom: none;
         }
+
+        .prpt-pagination {
+          padding: 12px 4px 0;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 12px;
+          border-top: 1px solid var(--prpt-border);
+          margin-top: 14px;
+        }
+        .prpt-pagination__info { font-size: 13px; color: var(--prpt-muted); }
+        .prpt-pagination__controls { display: flex; gap: 6px; flex-wrap: wrap; }
+        .prpt-page-btn {
+          min-width: 32px; padding: 6px 12px;
+          border: 1px solid var(--prpt-border);
+          background: #fff; border-radius: 6px;
+          font-size: 13px; cursor: pointer;
+          color: var(--prpt-text); font-family: inherit;
+        }
+        .prpt-page-btn:hover:not(:disabled) { background: #f8fafc; }
+        .prpt-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+        .prpt-page-btn--active { background: var(--prpt-primary); color: #fff; border-color: var(--prpt-primary); }
 
         @media (max-width: 1400px) {
           .prpt-stats { grid-template-columns: repeat(3, 1fr); }

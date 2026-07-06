@@ -127,6 +127,8 @@ export default function InwardEntry() {
   const [recentInwards, setRecentInwards] = useState([]);     // 🆕
   const [totalInwards, setTotalInwards] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const [masters, setMasters] = useState({
     companies: [], locations: [], suppliers: [],
@@ -232,6 +234,23 @@ if (!editId) {
       (inw.design?.designNo || "").toLowerCase().includes(q)
     );
   }, [recentInwards, searchQuery]);
+
+  /* ──────── 🆕 PAGINATION ──────── */
+  const totalPages = Math.max(1, Math.ceil(displayedInwards.length / ITEMS_PER_PAGE));
+
+  const paginatedInwards = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return displayedInwards.slice(start, start + ITEMS_PER_PAGE);
+  }, [displayedInwards, currentPage]);
+
+  // search change hone pe page 1 pe reset
+  useEffect(() => { setCurrentPage(1); }, [searchQuery]);
+
+  // agar current page range se bahar chala jaaye (data change ke baad)
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
   /* ──────── SUMMARY ──────── */
   const summary = useMemo(() => {
     const totalPcs = pcsDetails.length;
@@ -815,7 +834,7 @@ if (!editId) {
                       </td>
                     </tr>
                   ) : (
-                    displayedInwards.map((inw) => {
+                    paginatedInwards.map((inw) => {
                       const totalMeter = (inw.pcsDetails || []).reduce(
                         (s, p) => s + (parseFloat(p.meter) || 0), 0
                       );
@@ -857,6 +876,41 @@ if (!editId) {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* 🆕 Pagination */}
+            <div className="inward-pagination">
+              <div className="inward-pagination__info">
+                Showing {displayedInwards.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+                {Math.min(currentPage * ITEMS_PER_PAGE, displayedInwards.length)} of {displayedInwards.length} entries
+              </div>
+              <div className="inward-pagination__controls">
+                <button
+                  className="inward-page-btn"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    className={`inward-page-btn ${page === currentPage ? "inward-page-btn--active" : ""}`}
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </button>
+                ))}
+
+                <button
+                  className="inward-page-btn"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </section>
         )}
@@ -1214,6 +1268,25 @@ if (!editId) {
         .inward-tr:last-child .inward-td { border-bottom: none; }
         .inward-tr:hover { background: #fafbfc; }
         .inward-td--empty { text-align: center; color: var(--inw-muted); padding: 32px; }
+
+        /* 🆕 Pagination */
+        .inward-pagination {
+          padding: 12px 4px 0;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 12px;
+        }
+        .inward-pagination__info { font-size: 13px; color: var(--inw-muted); }
+        .inward-pagination__controls { display: flex; gap: 6px; flex-wrap: wrap; }
+        .inward-page-btn {
+          min-width: 32px; padding: 6px 12px;
+          border: 1px solid var(--inw-border);
+          background: #fff; border-radius: 6px;
+          font-size: 13px; cursor: pointer;
+          color: var(--inw-text); font-family: inherit;
+        }
+        .inward-page-btn:hover:not(:disabled) { background: #f8fafc; }
+        .inward-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+        .inward-page-btn--active { background: var(--inw-primary); color: #fff; border-color: var(--inw-primary); }
         .inward-chip {
           display: inline-block; padding: 4px 12px;
           background: #f1f5f9; border-radius: 12px;
@@ -1298,6 +1371,8 @@ if (!editId) {
           .inward-summary-grid { grid-template-columns: 1fr 1fr; }
           .inward-page__actions { width: 100%; }
           .inward-page__actions .inward-btn { flex: 1; justify-content: center; }
+          .inward-pagination { justify-content: center; }
+          .inward-pagination__info { text-align: center; width: 100%; }
         }
       `}</style>
     </div>
