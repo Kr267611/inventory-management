@@ -151,17 +151,17 @@ function DashboardHome() {
   }, [inventoryStats, todayStats, yesterdayStats]);
 
   /* ──────── RECENT INWARD (last 5) ──────── */
-  const recentInwards = useMemo(() => {
-    return inwards.slice(0, 5).map((i) => ({
-      date: formatDate(i.entryDate || i.createdAt),
-      baleNo: i.baleNo || "-",                    // 🆕
-      supplier: i.supplier?.name || "-",
-      item: i.fabric?.name || "-",
-      qty: i.totalPcs || 0,
-      rate: i.rate || 0,
-      total: i.baseCurrencyTotal || (i.totalMeter * i.rate) || 0,
-    }));
-  }, [inwards]);
+  // const recentInwards = useMemo(() => {
+  //   return inwards.slice(0, 5).map((i) => ({
+  //     date: formatDate(i.entryDate || i.createdAt),
+  //     baleNo: i.baleNo || "-",                    // 🆕
+  //     supplier: i.supplier?.name || "-",
+  //     item: i.fabric?.name || "-",
+  //     qty: i.totalPcs || 0,
+  //     rate: i.rate || 0,
+  //     total: i.baseCurrencyTotal || (i.totalMeter * i.rate) || 0,
+  //   }));
+  // }, [inwards]);
 
 
   /* ──────── RECENT PAYMENTS (last 5) ──────── */
