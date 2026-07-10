@@ -13,4 +13,5 @@ import {api} from "./api";
     create: (data) => api.post("/inward/add", data),
     update: (id, data) => api.put(`/inward/update/${id}`, data),
     delete: (id) => api.delete(`/inward/delete/${id}`),
+    bulkImport: (rows) => api.post("/inward/bulk", { rows })
 }
