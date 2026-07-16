@@ -7,6 +7,7 @@ import {
 import { inventoryApi } from "../../Api/inventoryApi";
 import { inwardApi } from "../../Api/inwardApi";
 import { salesApi } from "../../Api/sales";
+import {paymentApi} from "../../Api/paymentApi";
 
 const fmtINR = (n) =>
   Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -31,6 +32,7 @@ function DashboardHome() {
     lowStockItems: 0, outOfStockItems: 0,
   });
   const [inwards, setInwards] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [sales, setSales] = useState([]);
   const [lowStockList, setLowStockList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,16 +41,18 @@ function DashboardHome() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [invStatsData, inwardsData, salesData, lowStockData] = await Promise.all([
+      const [invStatsData, inwardsData, salesData, lowStockData, paymentsData] = await Promise.all([
         inventoryApi.getStats(),
         inwardApi.getAll(),
         salesApi.getAll(),
         inventoryApi.getAll({ stockType: "Low Stock" }),
+        paymentApi.getAll(),
       ]);
       setInventoryStats(invStatsData);
       setInwards(inwardsData);
       setSales(salesData);
       setLowStockList(lowStockData);
+      setPayments(paymentsData);
     } catch (err) {
       console.error("Dashboard load failed:", err.message);
     } finally {
@@ -147,17 +151,30 @@ function DashboardHome() {
   }, [inventoryStats, todayStats, yesterdayStats]);
 
   /* ──────── RECENT INWARD (last 5) ──────── */
-  const recentInwards = useMemo(() => {
-    return inwards.slice(0, 5).map((i) => ({
-      date: formatDate(i.entryDate || i.createdAt),
-      baleNo: i.baleNo || "-",                    // 🆕
-      supplier: i.supplier?.name || "-",
-      item: i.fabric?.name || "-",
-      qty: i.totalPcs || 0,
-      rate: i.rate || 0,
-      total: i.baseCurrencyTotal || (i.totalMeter * i.rate) || 0,
-    }));
-  }, [inwards]);
+  // const recentInwards = useMemo(() => {
+  //   return inwards.slice(0, 5).map((i) => ({
+  //     date: formatDate(i.entryDate || i.createdAt),
+  //     baleNo: i.baleNo || "-",                    // 🆕
+  //     supplier: i.supplier?.name || "-",
+  //     item: i.fabric?.name || "-",
+  //     qty: i.totalPcs || 0,
+  //     rate: i.rate || 0,
+  //     total: i.baseCurrencyTotal || (i.totalMeter * i.rate) || 0,
+  //   }));
+  // }, [inwards]);
+
+
+  /* ──────── RECENT PAYMENTS (last 5) ──────── */
+const recentPayments = useMemo(() => {
+  return payments.slice(0, 5).map((p) => ({
+    date: formatDate(p.paymentDate || p.createdAt),
+    customer: p.customer?.name || "-",
+    invoice: p.sale?.invoiceNo || (p.isAdvance ? "Advance" : "-"),
+    mode: p.paymentMode?.name || "-",
+    amount: p.amountReceived || 0,
+    status: p.status || "-",
+  }));
+}, [payments]);
 
   /* ──────── RECENT SALES (last 5) ──────── */
   const recentSales = useMemo(() => {
@@ -346,46 +363,53 @@ function DashboardHome() {
       {/* Tables Row */}
       <div className="dashboard-tables-grid">
         {/* Recent Inward */}
-        <div className="dashboard-card">
-          <div className="dashboard-card-header">
-            <h3>Recent Inward Entries</h3>
-            <button className="dashboard-view-all-btn" onClick={() => navigate("/dashboard/inward")}>
-              View All
-            </button>
-          </div>
-          <div className="dashboard-table-wrapper">
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Bale No</th>{/* 🆕 */}
-                  <th>Supplier</th>
-                  <th>Item</th>
-                  <th>Qty</th>
-                  <th>Rate</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentInwards.length === 0 ? (
-                  <tr><td colSpan="7" className="dashboard-td-empty">No inward entries yet</td></tr>
-                ) : (
-                  recentInwards.map((row, i) => (
-                    <tr key={i}>
-                      <td>{row.date}</td>
-                      <td>{row.baleNo !== "-" ? <span className="dashboard-bale-chip">{row.baleNo}</span> : "-"}</td>{/* 🆕 */}
-                      <td>{row.supplier}</td>
-                      <td>{row.item}</td>
-                      <td>{row.qty}</td>
-                      <td>{Number(row.rate).toFixed(2)}</td>
-                      <td>{fmtINR(row.total)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+     {/* Recent Payments */}
+<div className="dashboard-card">
+  <div className="dashboard-card-header">
+    <h3>Recent Payments</h3>
+    <button className="dashboard-view-all-btn" onClick={() => navigate("/dashboard/payment")}>
+      View All
+    </button>
+  </div>
+  <div className="dashboard-table-wrapper">
+    <table className="dashboard-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Customer</th>
+          <th>Invoice</th>
+          <th>Mode</th>
+          <th>Amount</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {recentPayments.length === 0 ? (
+          <tr><td colSpan="6" className="dashboard-td-empty">No payments yet</td></tr>
+        ) : (
+          recentPayments.map((row, i) => (
+            <tr key={i}>
+              <td>{row.date}</td>
+              <td>{row.customer}</td>
+              <td className="dashboard-td-invoice">
+                {row.invoice === "Advance"
+                  ? <span className="dashboard-bale-chip">Advance</span>
+                  : row.invoice}
+              </td>
+              <td>{row.mode}</td>
+              <td>{fmtINR(row.amount)}</td>
+              <td>
+                <span className={`dashboard-status dashboard-status--${row.status.toLowerCase()}`}>
+                  {row.status}
+                </span>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
 
         {/* Recent Sales */}
         <div className="dashboard-card">

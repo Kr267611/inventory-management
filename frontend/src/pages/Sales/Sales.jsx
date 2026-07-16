@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { salesApi } from "../../Api/sales";
 import { inventoryApi } from "../../Api/inventoryApi";
 import { fetchAllMasters } from "../../Api/masterApi";
+import SalesBulkBaleAdd from "./Salesbulkbaleadd";
 
 /* ================================================================
    ICONS
@@ -93,6 +94,7 @@ export default function Sales() {
   const [totalSales, setTotalSales] = useState(0);            // 🆕
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);   // 🆕 pagination
+  const [entryMode, setEntryMode] = useState("bulk"); // 🆕 "single" or "bulk"
   const ITEMS_PER_PAGE = 10;
   const [masters, setMasters] = useState({
     customers: [], companies: [], locations: [], fabrics: [],
@@ -509,6 +511,7 @@ export default function Sales() {
         await salesApi.create(payload);
         alert("Sale created! Bale-wise stock ghat gaya.");
       }
+      setItems([]);
       navigate("/dashboard/sales");
     } catch (err) {
       alert("Save failed: " + err.message);
@@ -612,228 +615,251 @@ export default function Sales() {
               </Field>
             </div>
           </section>
+          {/* 🆕 MODE TOGGLE */}
+          <div className="sales-mode-toggle">
+            <button
+              className={`sales-mode-btn ${entryMode === "bulk" ? "sales-mode-btn--active" : ""}`}
+              onClick={() => setEntryMode("bulk")}
+            >
+              📦 Full Bale (Multiple)
+            </button>
+            <button
+              className={`sales-mode-btn ${entryMode === "single" ? "sales-mode-btn--active" : ""}`}
+              onClick={() => setEntryMode("single")}
+            >
+              ✂️ PCS-wise (Single Bale)
+            </button>
+          </div>
+
+          {entryMode === "bulk" && (
+            <SalesBulkBaleAdd
+              existingItems={items}
+              onAddItems={(newItems) => setItems((prev) => [...prev, ...newItems])}
+            />
+          )}
 
           {/* 🆕 ADD ITEMS — BALE-BASED */}
-          <section className="sales-card">
-            <div className="sales-card__head">
-              <h2 className="sales-card__title">Add Items (by Bale No)</h2>
-              <button
-                className="sales-btn sales-btn--primary sales-btn--sm"
-                onClick={handleAddItem}
-                disabled={!baleData}
-              >
-                {editingId ? <Icon.Check /> : <Icon.Plus />}
-                <span>{editingId ? "Update Item" : "Add Item"}</span>
-              </button>
-            </div>
-
-            {/* 🆕 BALE LOOKUP BAR — top, highlighted */}
-            <div className="sales-bale-bar">
-              <div className="sales-bale-bar__main">
-                <div className="sales-bale-bar__icon"><Icon.Tag /></div>
-                <div className="sales-bale-bar__input-wrap">
-                  <label className="sales-bale-bar__label">
-                    Bale No <span className="sales-field__required">*</span>
-                  </label>
-                  <input
-                    className="sales-input sales-bale-input"
-                    placeholder="A35, A59, 1224..."
-                    value={itemForm.baleNo}
-                    onChange={(e) => setIf("baleNo", e.target.value.toUpperCase())}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        lookupBale(itemForm.baleNo);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (itemForm.baleNo && (!baleData || baleData.baleNo !== itemForm.baleNo)) {
-                        lookupBale(itemForm.baleNo);
-                      }
-                    }}
-                  />
-                </div>
-
-                {/* Lookup status */}
-                <div className="sales-bale-bar__status">
-                  {baleLookup.loading && (
-                    <span className="sales-bale-status sales-bale-status--loading">
-                      <Icon.Spinner /> Looking up...
-                    </span>
-                  )}
-                  {!baleLookup.loading && baleData && (
-                    <span className="sales-bale-status sales-bale-status--success">
-                      <Icon.Check /> Found: <strong>{baleData.fabric?.name}</strong> · {baleData.availablePcs} PCS available
-                    </span>
-                  )}
-                  {!baleLookup.loading && baleLookup.error && (
-                    <span className="sales-bale-status sales-bale-status--error">
-                      <Icon.X /> {baleLookup.error}
-                    </span>
-                  )}
-                  {!baleLookup.loading && !baleData && !baleLookup.error && !itemForm.baleNo && (
-                    <span className="sales-bale-status sales-bale-status--hint">
-                      Type bale no and press Enter or Tab to lookup
-                    </span>
-                  )}
-                </div>
-
-                {(baleData || itemForm.baleNo) && (
-                  <button className="sales-bale-clear" onClick={handleClearBale} title="Clear">
-                    <Icon.X />
-                  </button>
-                )}
+          {entryMode === "single" && (
+            <section className="sales-card">
+              <div className="sales-card__head">
+                <h2 className="sales-card__title">Add Items (by Bale No)</h2>
+                <button
+                  className="sales-btn sales-btn--primary sales-btn--sm"
+                  onClick={handleAddItem}
+                  disabled={!baleData}
+                >
+                  {editingId ? <Icon.Check /> : <Icon.Plus />}
+                  <span>{editingId ? "Update Item" : "Add Item"}</span>
+                </button>
               </div>
-            </div>
 
-            {/* Auto-filled fields (Row 1 — read-only) */}
-            <div className="sales-grid sales-grid--4">
-              <Field label="Fabric / Item">
-                <MasterSelect value={itemForm.fabric} options={masters.fabrics} disabled />
-              </Field>
-              <Field label="Quality">
-                <MasterSelect value={itemForm.fabricQuality} options={masters.qualities} disabled />
-              </Field>
-              <Field label="Color">
-                <MasterSelect value={itemForm.color} options={masters.colors} disabled />
-              </Field>
-              <Field label="Available PCS">
-                <input
-                  className={`sales-input ${availablePcs <= 0 ? "sales-input--zero" : "sales-input--readonly"}`}
-                  readOnly
-                  value={availablePcs}
-                />
-              </Field>
-            </div>
+              {/* 🆕 BALE LOOKUP BAR — top, highlighted */}
+              <div className="sales-bale-bar">
+                <div className="sales-bale-bar__main">
+                  <div className="sales-bale-bar__icon"><Icon.Tag /></div>
+                  <div className="sales-bale-bar__input-wrap">
+                    <label className="sales-bale-bar__label">
+                      Bale No <span className="sales-field__required">*</span>
+                    </label>
+                    <input
+                      className="sales-input sales-bale-input"
+                      placeholder="A35, A59, 1224..."
+                      value={itemForm.baleNo}
+                      onChange={(e) => setIf("baleNo", e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          lookupBale(itemForm.baleNo);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (itemForm.baleNo && (!baleData || baleData.baleNo !== itemForm.baleNo)) {
+                          lookupBale(itemForm.baleNo);
+                        }
+                      }}
+                    />
+                  </div>
 
-            {/* User-editable fields (Row 2) */}
-            {/* 🆕 PIECES TABLE — editable per piece */}
-            {baleData && salePcsRows.length > 0 && (
-              <div className="sales-pcs-section">
-                <div className="sales-pcs-header">
-                  <div>
-                    <h3 className="sales-pcs-title">
-                      Pieces in Bale ({salePcsRows.length})
-                    </h3>
-                    <div className="sales-pcs-hint">
-                      <Icon.Info />
-                      <span>Uncheck pieces to skip · Edit meter for partial sale</span>
+                  {/* Lookup status */}
+                  <div className="sales-bale-bar__status">
+                    {baleLookup.loading && (
+                      <span className="sales-bale-status sales-bale-status--loading">
+                        <Icon.Spinner /> Looking up...
+                      </span>
+                    )}
+                    {!baleLookup.loading && baleData && (
+                      <span className="sales-bale-status sales-bale-status--success">
+                        <Icon.Check /> Found: <strong>{baleData.fabric?.name}</strong> · {baleData.availablePcs} PCS available
+                      </span>
+                    )}
+                    {!baleLookup.loading && baleLookup.error && (
+                      <span className="sales-bale-status sales-bale-status--error">
+                        <Icon.X /> {baleLookup.error}
+                      </span>
+                    )}
+                    {!baleLookup.loading && !baleData && !baleLookup.error && !itemForm.baleNo && (
+                      <span className="sales-bale-status sales-bale-status--hint">
+                        Type bale no and press Enter or Tab to lookup
+                      </span>
+                    )}
+                  </div>
+
+                  {(baleData || itemForm.baleNo) && (
+                    <button className="sales-bale-clear" onClick={handleClearBale} title="Clear">
+                      <Icon.X />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Auto-filled fields (Row 1 — read-only) */}
+              <div className="sales-grid sales-grid--4">
+                <Field label="Fabric / Item">
+                  <MasterSelect value={itemForm.fabric} options={masters.fabrics} disabled />
+                </Field>
+                <Field label="Quality">
+                  <MasterSelect value={itemForm.fabricQuality} options={masters.qualities} disabled />
+                </Field>
+                <Field label="Color">
+                  <MasterSelect value={itemForm.color} options={masters.colors} disabled />
+                </Field>
+                <Field label="Available PCS">
+                  <input
+                    className={`sales-input ${availablePcs <= 0 ? "sales-input--zero" : "sales-input--readonly"}`}
+                    readOnly
+                    value={availablePcs}
+                  />
+                </Field>
+              </div>
+
+              {/* User-editable fields (Row 2) */}
+              {/* 🆕 PIECES TABLE — editable per piece */}
+              {baleData && salePcsRows.length > 0 && (
+                <div className="sales-pcs-section">
+                  <div className="sales-pcs-header">
+                    <div>
+                      <h3 className="sales-pcs-title">
+                        Pieces in Bale ({salePcsRows.length})
+                      </h3>
+                      <div className="sales-pcs-hint">
+                        <Icon.Info />
+                        <span>Uncheck pieces to skip · Edit meter for partial sale</span>
+                      </div>
+                    </div>
+                    <div className="sales-pcs-actions">
+                      <button className="sales-btn sales-btn--ghost sales-btn--sm" onClick={() => toggleAllPcs(true)}>
+                        Select All
+                      </button>
+                      <button className="sales-btn sales-btn--ghost sales-btn--sm" onClick={() => toggleAllPcs(false)}>
+                        Clear All
+                      </button>
                     </div>
                   </div>
-                  <div className="sales-pcs-actions">
-                    <button className="sales-btn sales-btn--ghost sales-btn--sm" onClick={() => toggleAllPcs(true)}>
-                      Select All
-                    </button>
-                    <button className="sales-btn sales-btn--ghost sales-btn--sm" onClick={() => toggleAllPcs(false)}>
-                      Clear All
-                    </button>
+
+                  <div className="sales-pcs-table-wrap">
+                    <table className="sales-pcs-table">
+                      <thead>
+                        <tr>
+                          <th className="sales-th--center" style={{ width: 50 }}>Sell</th>
+                          <th className="sales-th--center" style={{ width: 80 }}>PCS No</th>
+                          <th className="sales-th--center">Meter</th>
+                          <th className="sales-th--center">Color</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {salePcsRows.map((row) => (
+                          <tr
+                            key={row.id}
+                            className={`sales-pcs-tr ${row.selected ? "sales-pcs-tr--active" : "sales-pcs-tr--skip"}`}
+                          >
+                            <td className="sales-td--center">
+                              <input
+                                type="checkbox"
+                                className="sales-pcs-check"
+                                checked={row.selected}
+                                onChange={() => togglePcsRow(row.id)}
+                              />
+                            </td>
+                            <td className="sales-td--center sales-td--strong">{row.pcsNo}</td>
+                            <td className="sales-td--center">
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="sales-input sales-pcs-input"
+                                value={row.meter}
+                                onChange={(e) => updatePcsRow(row.id, "meter", e.target.value)}
+                                disabled={!row.selected}
+                              />
+                            </td>
+                            <td className="sales-td--center">
+                              <select
+                                className="sales-input sales-pcs-input"
+                                value={row.color}
+                                onChange={(e) => updatePcsRow(row.id, "color", e.target.value)}
+                                disabled={!row.selected}
+                              >
+                                <option value="">—</option>
+                                {masters.colors.map((c) => (
+                                  <option key={c._id} value={c._id}>{c.name}</option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="sales-pcs-total">
+                          <td colSpan="2" className="sales-td--strong sales-td--center">
+                            SELECTED
+                          </td>
+                          <td className="sales-td--center sales-td--strong">
+                            {selectedPcsCount} pcs · {fmt(selectedTotalMeter)}m
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 </div>
+              )}
 
-                <div className="sales-pcs-table-wrap">
-                  <table className="sales-pcs-table">
-                    <thead>
-                      <tr>
-                        <th className="sales-th--center" style={{ width: 50 }}>Sell</th>
-                        <th className="sales-th--center" style={{ width: 80 }}>PCS No</th>
-                        <th className="sales-th--center">Meter</th>
-                        <th className="sales-th--center">Color</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salePcsRows.map((row) => (
-                        <tr
-                          key={row.id}
-                          className={`sales-pcs-tr ${row.selected ? "sales-pcs-tr--active" : "sales-pcs-tr--skip"}`}
-                        >
-                          <td className="sales-td--center">
-                            <input
-                              type="checkbox"
-                              className="sales-pcs-check"
-                              checked={row.selected}
-                              onChange={() => togglePcsRow(row.id)}
-                            />
-                          </td>
-                          <td className="sales-td--center sales-td--strong">{row.pcsNo}</td>
-                          <td className="sales-td--center">
-                            <input
-                              type="number"
-                              step="0.01"
-                              className="sales-input sales-pcs-input"
-                              value={row.meter}
-                              onChange={(e) => updatePcsRow(row.id, "meter", e.target.value)}
-                              disabled={!row.selected}
-                            />
-                          </td>
-                          <td className="sales-td--center">
-                            <select
-                              className="sales-input sales-pcs-input"
-                              value={row.color}
-                              onChange={(e) => updatePcsRow(row.id, "color", e.target.value)}
-                              disabled={!row.selected}
-                            >
-                              <option value="">—</option>
-                              {masters.colors.map((c) => (
-                                <option key={c._id} value={c._id}>{c.name}</option>
-                              ))}
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="sales-pcs-total">
-                        <td colSpan="2" className="sales-td--strong sales-td--center">
-                          SELECTED
-                        </td>
-                        <td className="sales-td--center sales-td--strong">
-                          {selectedPcsCount} pcs · {fmt(selectedTotalMeter)}m
-                        </td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+              {/* Rate / Discount / Amount */}
+              <div className="sales-grid sales-grid--4">
+                <Field label="Rate (Per Mtr)" required>
+                  <input
+                    className="sales-input"
+                    type="number"
+                    step="0.01"
+                    value={itemForm.rate}
+                    onChange={(e) => setIf("rate", e.target.value)}
+                    placeholder="0.00"
+                    disabled={!baleData}
+                  />
+                </Field>
+                <Field label="Discount (Per Mtr)">
+                  <input
+                    className="sales-input"
+                    type="number"
+                    step="0.01"
+                    value={itemForm.discount}
+                    onChange={(e) => setIf("discount", e.target.value)}
+                    placeholder="0.00"
+                    disabled={!baleData}
+                  />
+                </Field>
+                <Field label="Selected">
+                  <input
+                    className="sales-input sales-input--readonly"
+                    readOnly
+                    value={`${selectedPcsCount} pcs · ${fmt(selectedTotalMeter)}m`}
+                  />
+                </Field>
+                <Field label="Amount (INR)">
+                  <input className="sales-input sales-input--computed" readOnly value={fmt(itemAmount)} />
+                </Field>
               </div>
-            )}
-
-            {/* Rate / Discount / Amount */}
-            <div className="sales-grid sales-grid--4">
-              <Field label="Rate (Per Mtr)" required>
-                <input
-                  className="sales-input"
-                  type="number"
-                  step="0.01"
-                  value={itemForm.rate}
-                  onChange={(e) => setIf("rate", e.target.value)}
-                  placeholder="0.00"
-                  disabled={!baleData}
-                />
-              </Field>
-              <Field label="Discount (Per Mtr)">
-                <input
-                  className="sales-input"
-                  type="number"
-                  step="0.01"
-                  value={itemForm.discount}
-                  onChange={(e) => setIf("discount", e.target.value)}
-                  placeholder="0.00"
-                  disabled={!baleData}
-                />
-              </Field>
-              <Field label="Selected">
-                <input
-                  className="sales-input sales-input--readonly"
-                  readOnly
-                  value={`${selectedPcsCount} pcs · ${fmt(selectedTotalMeter)}m`}
-                />
-              </Field>
-              <Field label="Amount (INR)">
-                <input className="sales-input sales-input--computed" readOnly value={fmt(itemAmount)} />
-              </Field>
-            </div>
-          </section>
-
+            </section>
+          )}
           {/* SELECTED ITEMS TABLE */}
           <section className="sales-card">
             <h2 className="sales-card__title">Selected Items</h2>
@@ -941,146 +967,146 @@ export default function Sales() {
         </aside>
       </div>
 
-          {!editId && !form.customer && items.length === 0 && recentSales.length > 0 && (
-            <section className="sales-card sales-recent-card">
-              <div className="sales-recent-header">
-                <div>
-                  <h2 className="sales-card__title" style={{ margin: 0 }}>
-                    Recent Sales <span className="sales-recent-count">
-                      ({searchQuery ? `${displayedSales.length} found` : `${totalSales} total`})
-                    </span>
-                  </h2>
-                  <div className="sales-recent-hint">
-                    <Icon.Info />
-                    <span>Customer select karte hi yeh table hide ho jayega · Search by Invoice, Customer, Bale</span>
-                  </div>
-                </div>
-                <div className="sales-recent-actions">
-                  <div className="sales-search-wrap">
-                    <input
-                      type="text"
-                      className="sales-search-input"
-                      placeholder="Search Invoice, Customer, Bale..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    {searchQuery && (
-                      <button
-                        className="sales-search-clear"
-                        onClick={() => setSearchQuery("")}
-                        title="Clear search"
-                      >
-                        <Icon.X />
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    className="sales-btn sales-btn--ghost sales-btn--sm"
-                    onClick={() => navigate("/dashboard/reports/sales-report")}
-                  >
-                    <span>View All</span>
-                  </button>
-                </div>
+      {!editId && !form.customer && items.length === 0 && recentSales.length > 0 && (
+        <section className="sales-card sales-recent-card">
+          <div className="sales-recent-header">
+            <div>
+              <h2 className="sales-card__title" style={{ margin: 0 }}>
+                Recent Sales <span className="sales-recent-count">
+                  ({searchQuery ? `${displayedSales.length} found` : `${totalSales} total`})
+                </span>
+              </h2>
+              <div className="sales-recent-hint">
+                <Icon.Info />
+                <span>Customer select karte hi yeh table hide ho jayega · Search by Invoice, Customer, Bale</span>
               </div>
+            </div>
+            <div className="sales-recent-actions">
+              <div className="sales-search-wrap">
+                <input
+                  type="text"
+                  className="sales-search-input"
+                  placeholder="Search Invoice, Customer, Bale..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    className="sales-search-clear"
+                    onClick={() => setSearchQuery("")}
+                    title="Clear search"
+                  >
+                    <Icon.X />
+                  </button>
+                )}
+              </div>
+              <button
+                className="sales-btn sales-btn--ghost sales-btn--sm"
+                onClick={() => navigate("/dashboard/reports/sales-report")}
+              >
+                <span>View All</span>
+              </button>
+            </div>
+          </div>
 
-              <div className="sales-table-wrap">
-                <table className="sales-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Invoice No</th>
-                      <th>Customer</th>
-                      <th>Items</th>
-                      <th className="sales-th--right">Total PCS</th>
-                      <th className="sales-th--right">Total Meter</th>
-                      <th className="sales-th--right">Net Amount</th>
-                      <th className="sales-th--center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedSales.length === 0 ? (
-                      <tr>
-                        <td colSpan="8" className="sales-td--empty">
-                          {searchQuery ? `🔍 "${searchQuery}" — koi match nahi mila` : "Koi sales nahi"}
+          <div className="sales-table-wrap">
+            <table className="sales-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Invoice No</th>
+                  <th>Customer</th>
+                  <th>Items</th>
+                  <th className="sales-th--right">Total PCS</th>
+                  <th className="sales-th--right">Total Meter</th>
+                  <th className="sales-th--right">Net Amount</th>
+                  <th className="sales-th--center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayedSales.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="sales-td--empty">
+                      {searchQuery ? `🔍 "${searchQuery}" — koi match nahi mila` : "Koi sales nahi"}
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedSales.map((s) => {
+                    const totalPcs = (s.items || []).reduce((sum, it) => sum + (it.pcs || 0), 0);
+                    const totalMeter = (s.items || []).reduce((sum, it) => sum + (it.totalMeter || 0), 0);
+                    const baleList = (s.items || []).map((it) => it.baleNo).filter(Boolean).join(", ");
+                    const status = s.paymentStatus || (s.balanceDue > 0 ? "Pending" : "Paid");
+                    return (
+                      <tr
+                        key={s._id}
+                        className="sales-tr sales-tr--clickable"
+                        onClick={() => navigate(`/dashboard/sales/${s._id}`)}
+                        title="Click to edit"
+                      >
+                        <td>{s.saleDate ? new Date(s.saleDate).toLocaleDateString("en-GB") : "—"}</td>
+                        <td>
+                          <span className="sales-recent-invoice">{s.invoiceNo || "—"}</span>
+                        </td>
+                        <td className="sales-td--strong">{s.customer?.name || "—"}</td>
+                        <td>
+                          <span style={{ fontSize: 11, color: "#64748b" }}>
+                            {baleList || "—"}
+                          </span>
+                        </td>
+                        <td className="sales-td--right">{totalPcs}</td>
+                        <td className="sales-td--right">{fmt(totalMeter)}</td>
+                        <td className="sales-td--right sales-td--strong">
+                          {fmt(s.netAmount || 0)}
+                        </td>
+                        <td className="sales-td--center">
+                          <span className={`sales-status-badge sales-status-badge--${status.toLowerCase()}`}>
+                            {status}
+                          </span>
                         </td>
                       </tr>
-                    ) : (
-                      paginatedSales.map((s) => {
-                        const totalPcs = (s.items || []).reduce((sum, it) => sum + (it.pcs || 0), 0);
-                        const totalMeter = (s.items || []).reduce((sum, it) => sum + (it.totalMeter || 0), 0);
-                        const baleList = (s.items || []).map((it) => it.baleNo).filter(Boolean).join(", ");
-                        const status = s.paymentStatus || (s.balanceDue > 0 ? "Pending" : "Paid");
-                        return (
-                          <tr
-                            key={s._id}
-                            className="sales-tr sales-tr--clickable"
-                            onClick={() => navigate(`/dashboard/sales/${s._id}`)}
-                            title="Click to edit"
-                          >
-                            <td>{s.saleDate ? new Date(s.saleDate).toLocaleDateString("en-GB") : "—"}</td>
-                            <td>
-                              <span className="sales-recent-invoice">{s.invoiceNo || "—"}</span>
-                            </td>
-                            <td className="sales-td--strong">{s.customer?.name || "—"}</td>
-                            <td>
-                              <span style={{ fontSize: 11, color: "#64748b" }}>
-                                {baleList || "—"}
-                              </span>
-                            </td>
-                            <td className="sales-td--right">{totalPcs}</td>
-                            <td className="sales-td--right">{fmt(totalMeter)}</td>
-                            <td className="sales-td--right sales-td--strong">
-                              {fmt(s.netAmount || 0)}
-                            </td>
-                            <td className="sales-td--center">
-                              <span className={`sales-status-badge sales-status-badge--${status.toLowerCase()}`}>
-                                {status}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
-              {/* 🆕 Pagination */}
-              <div className="sales-pagination">
-                <div className="sales-pagination__info">
-                  Showing {displayedSales.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
-                  {Math.min(currentPage * ITEMS_PER_PAGE, displayedSales.length)} of {displayedSales.length} entries
-                </div>
-                <div className="sales-pagination__controls">
-                  <button
-                    className="sales-page-btn"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </button>
+          {/* 🆕 Pagination */}
+          <div className="sales-pagination">
+            <div className="sales-pagination__info">
+              Showing {displayedSales.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+              {Math.min(currentPage * ITEMS_PER_PAGE, displayedSales.length)} of {displayedSales.length} entries
+            </div>
+            <div className="sales-pagination__controls">
+              <button
+                className="sales-page-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </button>
 
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      className={`sales-page-btn ${page === currentPage ? "sales-page-btn--active" : ""}`}
-                      onClick={() => setCurrentPage(page)}
-                    >
-                      {page}
-                    </button>
-                  ))}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`sales-page-btn ${page === currentPage ? "sales-page-btn--active" : ""}`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
 
-                  <button
-                    className="sales-page-btn"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
+              <button
+                className="sales-page-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <style>{`
         .sales-page, .sales-page * { box-sizing: border-box; }
@@ -1503,7 +1529,24 @@ export default function Sales() {
         .sales-page-btn:hover:not(:disabled) { background: #f8fafc; }
         .sales-page-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
         .sales-page-btn--active { background: var(--sl-primary); color: #fff; border-color: var(--sl-primary); }
-
+         .sales-mode-toggle {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  background: #f8fafc; padding: 6px; border-radius: 10px;
+  border: 1px solid var(--sl-border);
+}
+.sales-mode-btn {
+  flex: 1; min-width: 180px;
+  padding: 12px 16px; border: 1px solid transparent;
+  border-radius: 8px; background: transparent;
+  font-size: 14px; font-weight: 600; color: var(--sl-muted);
+  cursor: pointer; font-family: inherit; transition: all 0.15s;
+}
+.sales-mode-btn:hover { background: #fff; color: var(--sl-text); }
+.sales-mode-btn--active {
+  background: #fff; color: var(--sl-primary);
+  border-color: var(--sl-primary);
+  box-shadow: 0 1px 3px rgba(37,99,235,0.15);
+}
         .sales-note {
           background: #eff6ff; border: 1px solid #bfdbfe;
           border-radius: 10px; padding: 14px 18px;
