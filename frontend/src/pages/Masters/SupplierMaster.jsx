@@ -60,7 +60,7 @@ const Icon = {
   )
 };
 
-const EMPTY_FORM = { name: "", mobile: "", address: "" };
+const EMPTY_FORM = { name: "", mobile: "", address: "", reference: "" };
 
 const formatDate = (iso) => {
   if (!iso) return "-";
@@ -126,6 +126,7 @@ export default function SupplierMaster() {
       name: l.name || "",
       mobile: l.mobile || "",
       address: l.address || "",
+      reference: l.reference || "",
     });
     setDrawerOpen(true);
   };
@@ -230,15 +231,16 @@ export default function SupplierMaster() {
                 <th>Supplier Name</th>
                 <th>Mobile No.</th>
                 <th>Address</th>
+                <th>Reference</th>
                 <th>Created At</th>
                 <th className="location-th--center">Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="4" className="location-td--empty">Loading...</td></tr>
+                <tr><td colSpan="6" className="location-td--empty">Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan="4" className="location-td--empty">No Suppliers found</td></tr>
+                <tr><td colSpan="6" className="location-td--empty">No Suppliers found</td></tr>
               ) : (
                 paginated.map((l, idx) => (
                   <tr key={l._id} className="location-tr">
@@ -246,6 +248,7 @@ export default function SupplierMaster() {
                     <td className="location-td--name">{l.name}</td>
                     <td>{l.mobile}</td>
                     <td>{l.address}</td>
+                    <td>{l.reference}</td>
                     <td>{formatDate(l.createdAt)}</td>
                     <td>
                       <div className="location-actions">
@@ -333,6 +336,14 @@ export default function SupplierMaster() {
                 placeholder="e.g., 123 Main St, City, State"
                 value={form.address}
                 onChange={(e) => handleField("address", e.target.value)}
+              />
+            </Field>
+            <Field label="Reference">
+              <input
+                className="location-input"
+                placeholder="e.g., Referred by Ramesh"
+                value={form.reference}
+                onChange={(e) => handleField("reference", e.target.value)}
               />
             </Field>
           </section>

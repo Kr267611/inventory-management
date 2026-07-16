@@ -6,7 +6,8 @@ const supplierSchema = new mongoose.Schema({
     required: true
   },
   mobile: String,
-  address: String
+  address: String,
+  reference: String
 }, { timestamps: true });
 
 module.exports = mongoose.model("Supplier", supplierSchema);
