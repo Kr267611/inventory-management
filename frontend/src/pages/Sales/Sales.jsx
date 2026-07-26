@@ -1016,7 +1016,7 @@ export default function Sales() {
                   <th>Date</th>
                   <th>Invoice No</th>
                   <th>Customer</th>
-                  <th>Items</th>
+                  <th>Bale No</th>
                   <th className="sales-th--right">Total PCS</th>
                   <th className="sales-th--right">Total Meter</th>
                   <th className="sales-th--right">Net Amount</th>
