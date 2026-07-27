@@ -225,7 +225,7 @@ export default function InwardEntry() {
   /* ──────── 🆕 FILTERED RECENT INWARDS ──────── */
   const displayedInwards = useMemo(() => {
     if (!searchQuery.trim()) {
-      return recentInwards.slice(0, 10);   // default: last 10
+      return recentInwards;   // saare — pagination khud 10-10 dikhayega
     }
     const q = searchQuery.toLowerCase().trim();
     return recentInwards.filter((inw) =>
