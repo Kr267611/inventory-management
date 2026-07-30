@@ -69,6 +69,8 @@ export default function Payment() {
   const [allocations, setAllocations] = useState({});
   // 🆕 Unpaid-invoices list search (allocation form)
   const [invFilter, setInvFilter] = useState("");
+  // 🆕 Payment list quick search (customer / invoice / amount / ref / payment id)
+  const [quickSearch, setQuickSearch] = useState("");
 
   // 👇 TWO filter states — user types in `filters`, table reads from `appliedFilters`
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -194,8 +196,22 @@ export default function Payment() {
     }
     if (appliedFilters.fromDate) list = list.filter((p) => new Date(p.paymentDate) >= new Date(appliedFilters.fromDate));
     if (appliedFilters.toDate) list = list.filter((p) => new Date(p.paymentDate) <= new Date(appliedFilters.toDate));
+
+    // 🆕 Quick search — customer / invoice / amount / ref / payment id / remarks
+    const q = quickSearch.trim().toLowerCase();
+    if (q) {
+      list = list.filter((p) =>
+        (p.customer?.name || "").toLowerCase().includes(q) ||
+        (p.sale?.invoiceNo || "").toLowerCase().includes(q) ||
+        (p.paymentId || "").toLowerCase().includes(q) ||
+        (p.referenceNo || "").toLowerCase().includes(q) ||
+        (p.remarks || "").toLowerCase().includes(q) ||
+        (p.paymentMode?.name || "").toLowerCase().includes(q) ||
+        String(p.amountReceived ?? "").includes(q)
+      );
+    }
     return list;
-  }, [payments, appliedFilters]);
+  }, [payments, appliedFilters, quickSearch]);
 
   // Active filter indicator
   const hasActiveFilters = useMemo(() => {
@@ -203,7 +219,7 @@ export default function Payment() {
   }, [appliedFilters]);
 
   // 🆕 Reset to page 1 whenever the filtered list changes
-  useEffect(() => { setCurrentPage(1); }, [appliedFilters, payments.length]);
+  useEffect(() => { setCurrentPage(1); }, [appliedFilters, payments.length, quickSearch]);
 
   // 🆕 Paginated slice of filteredPayments (10 per page)
   const totalPages = Math.max(1, Math.ceil(filteredPayments.length / PAGE_SIZE));
@@ -540,7 +556,26 @@ export default function Payment() {
                 Payment List
                 {hasActiveFilters && <span className="payment-filter-tag">Filtered</span>}
               </h2>
-              <span className="payment-muted">Showing {filteredPayments.length} of {payments.length} entries</span>
+              <div className="payment-quick-wrap">
+                {/* 🆕 Quick search — customer, invoice, amount, ref, payment id */}
+                <input
+                  className="payment-quick-search"
+                  placeholder="🔍 Customer / Invoice / Amount / Ref dhoondo..."
+                  value={quickSearch}
+                  onChange={(e) => setQuickSearch(e.target.value)}
+                />
+                {quickSearch && (
+                  <button
+                    type="button"
+                    className="payment-quick-clear"
+                    onClick={() => setQuickSearch("")}
+                    title="Clear"
+                  >
+                    ✕
+                  </button>
+                )}
+                <span className="payment-muted">Showing {filteredPayments.length} of {payments.length} entries</span>
+              </div>
             </div>
 
             <div className="payment-table-wrap">
@@ -1032,6 +1067,28 @@ export default function Payment() {
           margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
         }
         .payment-muted { color: var(--pm-muted); font-size: 13px; }
+
+        /* 🆕 Quick search in Payment List header */
+        .payment-quick-wrap {
+          display: flex; align-items: center; gap: 8px;
+          flex-wrap: wrap; position: relative;
+        }
+        .payment-quick-search {
+          width: 300px; max-width: 100%;
+          padding: 8px 30px 8px 12px;
+          border: 1px solid var(--pm-border, #d1d5db); border-radius: 6px;
+          font-size: 13px; font-family: inherit;
+        }
+        .payment-quick-search:focus {
+          outline: none; border-color: var(--pm-primary);
+          box-shadow: 0 0 0 2px rgba(37,99,235,0.12);
+        }
+        .payment-quick-clear {
+          position: absolute; left: 275px;
+          background: none; border: none; cursor: pointer;
+          color: var(--pm-muted); font-size: 14px; padding: 2px 4px;
+        }
+        .payment-quick-clear:hover { color: #ef4444; }
 
         .payment-pagination {
           display: flex; align-items: center; justify-content: space-between;
