@@ -67,6 +67,8 @@ export default function Payment() {
   const [form, setForm] = useState(EMPTY_PAYMENT_FORM);
   // 🆕 Multi-invoice allocations: { saleId: "amount" }
   const [allocations, setAllocations] = useState({});
+  // 🆕 Unpaid-invoices list search (allocation form)
+  const [invFilter, setInvFilter] = useState("");
 
   // 👇 TWO filter states — user types in `filters`, table reads from `appliedFilters`
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -113,6 +115,13 @@ export default function Payment() {
       return sCustomerId === form.customer && s.paymentStatus !== "Paid";
     });
   }, [sales, form.customer]);
+
+  /* ──────── 🆕 Search-filtered view of unpaid invoices ──────── */
+  const visibleSales = useMemo(() => {
+    const q = invFilter.trim().toLowerCase();
+    if (!q) return customerSales;
+    return customerSales.filter((s) => (s.invoiceNo || "").toLowerCase().includes(q));
+  }, [customerSales, invFilter]);
 
   /* ──────── 🆕 TOTAL APPLIED across all selected invoices ──────── */
   const totalApplied = useMemo(() => {
@@ -290,6 +299,7 @@ export default function Payment() {
   const handleCustomerChange = (v) => {
     setForm({ ...form, customer: v });
     setAllocations({});                          // 🆕 reset allocations on customer change
+    setInvFilter("");                            // 🆕 reset invoice search
   };
 
   const handleSave = async () => {
@@ -751,13 +761,26 @@ export default function Payment() {
                       )}
                     </div>
 
+                    {/* 🆕 Invoice search */}
+                    {customerSales.length > 0 && (
+                      <input
+                        className="payment-alloc-search"
+                        placeholder="🔍 Invoice dhoondo... (e.g. 20260123)"
+                        value={invFilter}
+                        onChange={(e) => setInvFilter(e.target.value)}
+                      />
+                    )}
+
                     {customerSales.length === 0 ? (
                       <div className="payment-allocs__empty">
                         ✅ All invoices paid! Pure advance payment possible.
                       </div>
                     ) : (
                       <div className="payment-allocs__list">
-                        {customerSales.map((s) => {
+                        {visibleSales.length === 0 && (
+                          <div className="payment-allocs__empty">🔍 "{invFilter}" — koi invoice nahi mila</div>
+                        )}
+                        {visibleSales.map((s) => {
                           const isChecked = allocations[s._id] !== undefined;
                           const amount = allocations[s._id] || "";
                           return (
@@ -1155,6 +1178,16 @@ export default function Payment() {
         }
         .payment-allocs__hint {
           font-size: 11px; font-weight: 400; color: var(--pm-muted);
+        }
+        .payment-alloc-search {
+          width: 100%; box-sizing: border-box;
+          padding: 8px 12px; margin-bottom: 10px;
+          border: 1px solid var(--pm-border, #d1d5db); border-radius: 6px;
+          font-size: 13px; font-family: inherit;
+        }
+        .payment-alloc-search:focus {
+          outline: none; border-color: var(--pm-primary);
+          box-shadow: 0 0 0 2px rgba(37,99,235,0.12);
         }
         .payment-allocs__auto {
           background: var(--pm-primary); color: #fff;
