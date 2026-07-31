@@ -144,11 +144,20 @@ router.get("/stats", async (req, res) => {
       ]),
     ]);
 
+    const totalReceived  = totalReceivedAgg[0]?.total || 0;
+    const totalInvoices  = salesAgg[0]?.totalInvoices || 0;
+
+    // 🔧 Outstanding = NET receivable = Total Sales − Total Received.
+    // Isse teeno card reconcile karte hain:  Sales = Received + Outstanding.
+    // (Sirf balanceDue ka sum karte to overpaid/advance customers ka extra
+    //  double-count hota aur number bada aa jaata.)
+    const totalOutstanding = +Math.max(totalInvoices - totalReceived, 0).toFixed(2);
+
     res.json({
-      totalReceived:      totalReceivedAgg[0]?.total || 0,
+      totalReceived,
       monthCollection:    monthAgg[0]?.total || 0,
-      totalInvoices:      salesAgg[0]?.totalInvoices || 0,
-      totalOutstanding:   salesAgg[0]?.totalOutstanding || 0,
+      totalInvoices,
+      totalOutstanding,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
