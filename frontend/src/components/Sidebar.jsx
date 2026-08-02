@@ -39,6 +39,11 @@ function Sidebar({ isOpen }) {
           <span className="label">Payment</span>
         </NavLink>
 
+        <NavLink to="/dashboard/ask" className="nav-item">
+          <span className="icon">🤖</span>
+          <span className="label">AI Assistant</span>
+        </NavLink>
+
         {/* Reports */}
         <NavLink
           to="/dashboard/reports"

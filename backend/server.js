@@ -73,6 +73,10 @@ app.use("/api/auth", authRoutes);
 const paymentRoutes = require("./routes/PaymentRoutes");
 app.use("/api/payment", paymentRoutes);
 
+// AI assistant routes
+const aiRoutes = require("./routes/aiRoutes");
+app.use("/api/ask", aiRoutes);
+
 // test route
 app.get("/", (req, res) => {
   res.send("API is running...");

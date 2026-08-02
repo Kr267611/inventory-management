@@ -6,6 +6,7 @@ import Inward from "./pages/Inward/Inward";
 import Inventory from "./pages/Inventory/Inventory";
 import Sales from "./pages/Sales/Sales";
 import Payment from "./pages/Payment/Payment";
+import Ask from "./pages/Ask/Ask";
 import Masters from "./pages/Masters/Masters";
 import MasterHome from "./pages/Masters/MasterHome";
 import Fabrics from "./pages/Masters/Fabrics";
@@ -42,6 +43,7 @@ function App() {
         <Route path="inventory" element={<Inventory />} />
         <Route path="sales" element={<Sales />} />
         <Route path="payment" element={<Payment />} />
+        <Route path="ask" element={<Ask />} />
         <Route path="reports" element={<Reports/>}>
           <Route index element={<ReportMaster />} />
           <Route path="inward-report" element={<InwardReport />} />
