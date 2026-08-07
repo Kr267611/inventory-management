@@ -116,6 +116,35 @@
   color: #b91c1c;
 }
 
+/* ── download button ── */
+.ask-dl {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #047857;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ask-dl:hover {
+  background: #d1fae5;
+  border-color: #34d399;
+}
+
+.ask-dl__n {
+  font-weight: 400;
+  font-size: 11.5px;
+  color: #059669;
+  opacity: 0.8;
+}
+
 .ask-msg__meta {
   font-size: 11px;
   color: #9ca3af;

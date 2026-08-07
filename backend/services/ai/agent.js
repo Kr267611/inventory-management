@@ -23,6 +23,12 @@ KAAM KARNE KA TARIKA:
   dobara convert mat karo.
 - Agar tool bole ki customer nahi mila ya kai match hue, to user se poochho — naam mat maan lo.
 
+FILE / EXCEL / CSV:
+- User file maange to export_data chalao. File apne aap ban jaati hai aur user ko
+  download button dikh jaata hai — tumhe rows likhne ki zaroorat NAHI hai.
+- Kabhi khud CSV ya table ki poori rows mat likho. Sirf batao ki file taiyaar hai
+  aur usme kya hai (kitni rows, kis cheez ki).
+
 JAWAAB KAISA HO:
 - Hinglish me likho (Hindi, English letters me) — jaise user likhta hai.
 - Seedha matlab ki baat, chhota jawaab. Pehle jawaab, phir detail.
@@ -47,6 +53,7 @@ async function ask(question, history = []) {
 
   const toolsUsed = [];
   let model = "";
+  let exportData = null; // agar kisi tool ne file ka data diya ho
 
   for (let step = 1; step <= MAX_STEPS; step++) {
     const out = await chat({ messages, tools: definitions });
@@ -56,7 +63,7 @@ async function ask(question, history = []) {
 
     const calls = msg.tool_calls || [];
     if (!calls.length) {
-      return { answer: msg.content || "Jawaab nahi bana paaya, dobara poochho.", toolsUsed, model, steps: step };
+      return { answer: msg.content || "Jawaab nahi bana paaya, dobara poochho.", toolsUsed, model, steps: step, exportData };
     }
 
     // Model ne tools maange — chalao aur result wapas bhejo
@@ -84,10 +91,19 @@ async function ask(question, history = []) {
         result = { error: `Tool chalane me dikkat: ${e.message}` };
       }
 
+      // File ka data model ko nahi bhejte — wo bada hai aur model use bigaad sakta hai.
+      // Seedha frontend ko jaata hai download button ke liye.
+      let forModel = result;
+      if (result && result.__export) {
+        const { __export, ...rest } = result;
+        exportData = __export;
+        forModel = { ...rest, file_ready: `${__export.rows.length} rows ki file taiyaar hai — user ko download button dikh jayega` };
+      }
+
       messages.push({
         role: "tool",
         tool_call_id: call.id,
-        content: JSON.stringify(result),
+        content: JSON.stringify(forModel),
       });
     }
   }
@@ -99,6 +115,7 @@ async function ask(question, history = []) {
     toolsUsed,
     model,
     steps: MAX_STEPS,
+    exportData,
   };
 }
 

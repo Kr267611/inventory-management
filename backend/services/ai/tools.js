@@ -7,6 +7,7 @@ const Sales = require("../../models/Sales");
 const Payment = require("../../models/Payment");
 const Customer = require("../../models/Customer");
 const Inventory = require("../../models/Inventory");
+const Inward = require("../../models/Inward");
 
 // Ye sirf populate() ke liye register karne hain — warna
 // "Schema hasn't been registered for model X" error aata hai
@@ -14,6 +15,7 @@ require("../../models/paymentMode");
 require("../../models/Design");
 require("../../models/Color");
 require("../../models/Fabric");
+require("../../models/Supplier");
 
 /* ──────── helpers ──────── */
 
@@ -31,6 +33,9 @@ const day = (d) =>
   d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : null;
 
 const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Bale number milane ke liye — case aur extra space ka farak na pade
+const key = (s) => String(s || "").toUpperCase().trim();
 
 // Customer naam se dhoondho — pehle exact, phir partial (case-insensitive)
 async function findCustomers(name) {
@@ -337,6 +342,221 @@ async function find_anomalies() {
   };
 }
 
+// 8. Ek bale ki poori kahani — kab aayi, kab gayi, kitni bachi
+async function bale_ledger({ bale_no }) {
+  const b = await Inventory.findOne({ baleNo: new RegExp(`^${escapeRx(bale_no)}$`, "i") })
+    .populate("fabric", "name").populate("design", "designNo").populate("color", "name");
+  if (!b) return { error: `Bale "${bale_no}" inventory me nahi mila.` };
+
+  const inw = await Inward.findById(b.inward).select("entryDate voucherNo totalPcs totalMeter rate");
+  const sales = await Sales.find({ "items.baleNo": b.baleNo })
+    .sort({ saleDate: 1 }).populate("customer", "name").select("invoiceNo saleDate customer items");
+
+  const moves = [];
+  let bal = 0;
+  if (inw) {
+    bal += inw.totalPcs || 0;
+    moves.push({ date: day(inw.entryDate), type: "INWARD", ref: inw.voucherNo || "-", in: inw.totalPcs, out: 0, balance: bal });
+  }
+  sales.forEach((s) => {
+    const it = (s.items || []).find((i) => key(i.baleNo) === key(b.baleNo));
+    const out = it?.pcs || 0;
+    bal -= out;
+    moves.push({ date: day(s.saleDate), type: "SALE", ref: `${s.invoiceNo} (${s.customer?.name || "?"})`, in: 0, out, balance: bal });
+  });
+
+  return {
+    bale: b.baleNo,
+    fabric: b.fabric?.name || null,
+    design: b.design?.designNo || null,
+    color: b.color?.name || null,
+    aaya_tha_pcs: b.totalPcs,
+    abhi_available_pcs: b.availablePcs,
+    status: b.availablePcs > 0 ? "In Stock" : "Out of Stock",
+    movements: moves,
+    note: bal !== b.availablePcs ? `Dhyan do: ledger ka balance ${bal} hai par inventory ${b.availablePcs} bol rahi hai.` : null,
+  };
+}
+
+// 9. Inward dhoondho — kaunsa maal kab aaya
+async function inward_search({ bale_no, voucher_no, from, to, limit }) {
+  const q = {};
+  if (bale_no) q.baleNo = new RegExp(escapeRx(bale_no), "i");
+  if (voucher_no) q.voucherNo = new RegExp(escapeRx(voucher_no), "i");
+  if (from || to) {
+    q.entryDate = {};
+    if (from) q.entryDate.$gte = new Date(from);
+    if (to) q.entryDate.$lte = new Date(to);
+  }
+  const n = Math.min(Math.max(Number(limit) || 20, 1), 50);
+  const rows = await Inward.find(q).sort({ entryDate: -1 }).limit(n)
+    .populate("fabric", "name").populate("supplier", "name")
+    .select("entryDate voucherNo baleNo totalPcs totalMeter rate fabric supplier");
+  const matched = await Inward.countDocuments(q);
+  const [agg] = await Inward.aggregate([{ $match: q }, { $group: { _id: null, p: { $sum: "$totalPcs" }, m: { $sum: "$totalMeter" } } }]);
+
+  return {
+    matched,
+    showing: rows.length,
+    total_pcs: agg?.p || 0,
+    total_qty: r2(agg?.m || 0),
+    entries: rows.map((i) => ({
+      date: day(i.entryDate), voucher: i.voucherNo, bale: i.baleNo,
+      pcs: i.totalPcs, qty: r2(i.totalMeter), rate: i.rate,
+      fabric: i.fabric?.name || null, supplier: i.supplier?.name || null,
+    })),
+  };
+}
+
+// 10. Mahine-wise report
+async function monthly_report({ year, months }) {
+  const y = Number(year) || new Date().getFullYear();
+  const start = new Date(Date.UTC(y, 0, 1)), end = new Date(Date.UTC(y + 1, 0, 1));
+
+  const s = await Sales.aggregate([
+    { $match: { saleDate: { $gte: start, $lt: end } } },
+    { $group: { _id: { $month: "$saleDate" }, amt: { $sum: "$netAmount" }, n: { $sum: 1 }, pcs: { $sum: "$totalPcs" } } },
+  ]);
+  const p = await Payment.aggregate([
+    { $match: { paymentDate: { $gte: start, $lt: end } } },
+    { $group: { _id: { $month: "$paymentDate" }, amt: { $sum: "$amountReceived" }, n: { $sum: 1 } } },
+  ]);
+
+  const nm = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const sM = new Map(s.map((x) => [x._id, x])), pM = new Map(p.map((x) => [x._id, x]));
+  const want = Array.isArray(months) && months.length ? months.map(Number) : [...Array(12)].map((_, i) => i + 1);
+
+  const rows = want.filter((m) => sM.has(m) || pM.has(m)).map((m) => ({
+    month: `${nm[m - 1]} ${y}`,
+    sales: money(sM.get(m)?.amt || 0),
+    invoices: sM.get(m)?.n || 0,
+    pcs_becha: sM.get(m)?.pcs || 0,
+    paisa_aaya: money(pM.get(m)?.amt || 0),
+    payments: pM.get(m)?.n || 0,
+  }));
+
+  return {
+    year: y,
+    months: rows,
+    year_total_sales: money(s.reduce((a, x) => a + x.amt, 0)),
+    year_total_received: money(p.reduce((a, x) => a + x.amt, 0)),
+  };
+}
+
+// 11. Customer ka poora ledger — date-wise, running balance ke saath
+async function customer_ledger({ customer_name, from, to }) {
+  const res = await resolveOne(customer_name);
+  if (res.error) return res;
+  const c = res.customer;
+
+  const dq = {};
+  if (from) dq.$gte = new Date(from);
+  if (to) dq.$lte = new Date(to);
+
+  const sq = { customer: c._id }, pq = { customer: c._id };
+  if (from || to) { sq.saleDate = dq; pq.paymentDate = dq; }
+
+  const sales = await Sales.find(sq).select("saleDate invoiceNo netAmount").lean();
+  const pays = await Payment.find(pq).populate("paymentMode", "name").select("paymentDate paymentId amountReceived paymentMode").lean();
+
+  const rows = [
+    ...sales.map((s) => ({ d: s.saleDate, type: "SALE", ref: s.invoiceNo, debit: s.netAmount || 0, credit: 0 })),
+    ...pays.map((p) => ({ d: p.paymentDate, type: "PAYMENT", ref: `${p.paymentId}${p.paymentMode?.name ? " / " + p.paymentMode.name : ""}`, debit: 0, credit: p.amountReceived || 0 })),
+  ].sort((a, b) => new Date(a.d) - new Date(b.d));
+
+  let bal = 0;
+  const ledger = rows.map((r) => {
+    bal += r.debit - r.credit;
+    return { date: day(r.d), type: r.type, reference: r.ref, maal_diya: r.debit ? money(r.debit) : "-", paisa_aaya: r.credit ? money(r.credit) : "-", balance: money(bal) };
+  });
+
+  return {
+    customer: c.name,
+    entries: ledger.length,
+    ledger,
+    final_balance: money(bal),
+    matlab: bal > 0 ? `${c.name} pe ${money(bal)} baaki hai` : bal < 0 ? `${c.name} ka ${money(-bal)} extra jama hai` : "Hisaab barabar hai",
+    __export: { name: `ledger-${c.name.replace(/[^a-zA-Z0-9]/g, "_")}`, rows: ledger },
+  };
+}
+
+// 12. Do time period compare karo
+async function compare_period({ from_a, to_a, from_b, to_b }) {
+  const win = async (f, t) => {
+    const sq = { saleDate: { $gte: new Date(f), $lte: new Date(t) } };
+    const pq = { paymentDate: { $gte: new Date(f), $lte: new Date(t) } };
+    const [s] = await Sales.aggregate([{ $match: sq }, { $group: { _id: null, amt: { $sum: "$netAmount" }, n: { $sum: 1 }, pcs: { $sum: "$totalPcs" } } }]);
+    const [p] = await Payment.aggregate([{ $match: pq }, { $group: { _id: null, amt: { $sum: "$amountReceived" }, n: { $sum: 1 } } }]);
+    return { sales: r2(s?.amt || 0), invoices: s?.n || 0, pcs: s?.pcs || 0, received: r2(p?.amt || 0), payments: p?.n || 0 };
+  };
+  const A = await win(from_a, to_a), Bp = await win(from_b, to_b);
+  const pct = (a, b) => (b === 0 ? (a > 0 ? "naya" : "0%") : `${(((a - b) / b) * 100).toFixed(1)}%`);
+
+  return {
+    period_A: { range: `${from_a} se ${to_a}`, sales: money(A.sales), invoices: A.invoices, pcs: A.pcs, received: money(A.received) },
+    period_B: { range: `${from_b} se ${to_b}`, sales: money(Bp.sales), invoices: Bp.invoices, pcs: Bp.pcs, received: money(Bp.received) },
+    farak: {
+      sales: money(A.sales - Bp.sales) + `  (${pct(A.sales, Bp.sales)})`,
+      received: money(A.received - Bp.received) + `  (${pct(A.received, Bp.received)})`,
+      invoices: A.invoices - Bp.invoices,
+      pcs: A.pcs - Bp.pcs,
+    },
+  };
+}
+
+// 13. Excel/CSV file bana ke do — rows seedha DB se, model ne nahi likhe
+async function export_data({ report, customer_name, from, to, status }) {
+  const stamp = new Date().toISOString().slice(0, 10);
+
+  if (report === "invoices") {
+    const q = {};
+    if (customer_name) { const r = await resolveOne(customer_name); if (r.error) return r; q.customer = r.customer._id; }
+    if (status) q.paymentStatus = status;
+    if (from || to) { q.saleDate = {}; if (from) q.saleDate.$gte = new Date(from); if (to) q.saleDate.$lte = new Date(to); }
+    const rows = (await Sales.find(q).sort({ saleDate: -1 }).populate("customer", "name")
+      .select("invoiceNo saleDate customer totalPcs totalMeter netAmount paidAmount balanceDue paymentStatus items").lean())
+      .map((s) => ({
+        Date: day(s.saleDate), Invoice: s.invoiceNo, Customer: s.customer?.name || "",
+        Bales: (s.items || []).map((i) => i.baleNo).join("; "),
+        Pcs: s.totalPcs, Qty: s.totalMeter, Amount: s.netAmount,
+        Paid: s.paidAmount, Balance: s.balanceDue, Status: s.paymentStatus,
+      }));
+    return { report: "invoices", rows_count: rows.length, __export: { name: `invoices-${stamp}`, rows } };
+  }
+
+  if (report === "payments") {
+    const q = {};
+    if (customer_name) { const r = await resolveOne(customer_name); if (r.error) return r; q.customer = r.customer._id; }
+    if (from || to) { q.paymentDate = {}; if (from) q.paymentDate.$gte = new Date(from); if (to) q.paymentDate.$lte = new Date(to); }
+    const rows = (await Payment.find(q).sort({ paymentDate: -1 }).populate("customer", "name").populate("paymentMode", "name")
+      .select("paymentId paymentDate customer amountReceived paymentMode remarks").lean())
+      .map((p) => ({
+        Date: day(p.paymentDate), PaymentID: p.paymentId, Customer: p.customer?.name || "",
+        Amount: p.amountReceived, Mode: p.paymentMode?.name || "", Remarks: p.remarks || "",
+      }));
+    return { report: "payments", rows_count: rows.length, __export: { name: `payments-${stamp}`, rows } };
+  }
+
+  if (report === "stock") {
+    const rows = (await Inventory.find({ availablePcs: { $gt: 0 } }).sort({ baleNo: 1 })
+      .populate("fabric", "name").populate("design", "designNo").populate("color", "name")
+      .select("baleNo totalPcs availablePcs availableMeter rate fabric design color").lean())
+      .map((b) => ({
+        Bale: b.baleNo, Fabric: b.fabric?.name || "", Design: b.design?.designNo || "", Color: b.color?.name || "",
+        TotalPcs: b.totalPcs, AvailablePcs: b.availablePcs, AvailableQty: r2(b.availableMeter), Rate: b.rate,
+      }));
+    return { report: "stock", rows_count: rows.length, __export: { name: `stock-${stamp}`, rows } };
+  }
+
+  if (report === "outstanding") {
+    const top = await top_customers({ by: "outstanding", limit: 30 });
+    const rows = top.customers.map((c) => ({ Rank: c.rank, Customer: c.customer, Sales: c.sales, Received: c.received, Outstanding: c.outstanding, AdvanceExtra: c.advance_extra || "" }));
+    return { report: "outstanding", rows_count: rows.length, __export: { name: `outstanding-${stamp}`, rows } };
+  }
+
+  return { error: `"${report}" report nahi hai. Ye chal sakti hain: invoices, payments, stock, outstanding.` };
+}
+
 /* ──────── schemas (model ko ye dikhte hain) ──────── */
 
 const definitions = [
@@ -438,6 +658,108 @@ const definitions = [
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "bale_ledger",
+      description:
+        "Ek bale ki poori kahani date-wise: kab inward hui, kaunse invoice me kis customer ko gayi, aur abhi kitni bachi. 'bale 1293 ka hisaab dikha' type sawaal ke liye.",
+      parameters: {
+        type: "object",
+        properties: { bale_no: { type: "string", description: "Bale number, poora" } },
+        required: ["bale_no"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "inward_search",
+      description:
+        "Inward entries dhoondho — kaunsa maal kab aaya, kitne pcs, kaunse supplier se. Bale number, voucher number ya date range se.",
+      parameters: {
+        type: "object",
+        properties: {
+          bale_no: { type: "string" },
+          voucher_no: { type: "string" },
+          from: { type: "string", description: "YYYY-MM-DD" },
+          to: { type: "string", description: "YYYY-MM-DD" },
+          limit: { type: "integer", description: "default 20, max 50" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "monthly_report",
+      description:
+        "Mahine-wise report: har mahine kitni sales hui, kitne invoice bane, kitne pcs gaye, aur kitna paisa aaya. 'June me kitna becha' ya 'is saal ka mahina-wise' type sawaal ke liye.",
+      parameters: {
+        type: "object",
+        properties: {
+          year: { type: "integer", description: "saal, jaise 2026 (default: is saal)" },
+          months: { type: "array", items: { type: "integer" }, description: "sirf kuch mahine chahiye to [6,7]" },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "customer_ledger",
+      description:
+        "Ek customer ka poora khata date-wise — har sale aur har payment, running balance ke saath. 'TOYOSI ka poora hisaab dikha' type sawaal ke liye.",
+      parameters: {
+        type: "object",
+        properties: {
+          customer_name: { type: "string" },
+          from: { type: "string", description: "YYYY-MM-DD" },
+          to: { type: "string", description: "YYYY-MM-DD" },
+        },
+        required: ["customer_name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "compare_period",
+      description:
+        "Do time period ka comparison — sales, paisa, invoice, pcs. 'is mahine vs pichhle mahine' ya 'is saal vs pichhle saal' type sawaal ke liye.",
+      parameters: {
+        type: "object",
+        properties: {
+          from_a: { type: "string", description: "pehle period ki shuru date YYYY-MM-DD" },
+          to_a: { type: "string", description: "pehle period ki aakhri date" },
+          from_b: { type: "string", description: "dusre period ki shuru date" },
+          to_b: { type: "string", description: "dusre period ki aakhri date" },
+        },
+        required: ["from_a", "to_a", "from_b", "to_b"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "export_data",
+      description:
+        "Excel/CSV file bana ke do. Jab user 'CSV do', 'Excel me chahiye', 'file bana do', 'download karna hai' kahe tab ye chalao. Rows seedha database se aati hain.",
+      parameters: {
+        type: "object",
+        properties: {
+          report: { type: "string", enum: ["invoices", "payments", "stock", "outstanding"], description: "kaunsi report chahiye" },
+          customer_name: { type: "string", description: "sirf ek customer ka chahiye to" },
+          from: { type: "string", description: "YYYY-MM-DD" },
+          to: { type: "string", description: "YYYY-MM-DD" },
+          status: { type: "string", enum: ["Paid", "Partial", "Unpaid"], description: "sirf invoices report ke liye" },
+        },
+        required: ["report"],
+      },
+    },
+  },
 ];
 
 const handlers = {
@@ -448,6 +770,12 @@ const handlers = {
   top_customers,
   stock_check,
   find_anomalies,
+  bale_ledger,
+  inward_search,
+  monthly_report,
+  customer_ledger,
+  compare_period,
+  export_data,
 };
 
 module.exports = { definitions, handlers };

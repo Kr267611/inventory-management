@@ -7,9 +7,30 @@ const EXAMPLES = [
   "MARTIN'S ka kitna baaki hai?",
   "Sabse zyada baaki kis customer pe hai?",
   "Data me koi galti hai kya?",
-  "EBONY IBADAN ki saari invoice dikha",
-  "Stock me kitni bale bachi hai?",
+  "TOYOSI ka poora hisaab dikha",
+  "Bale 1293 ka ledger dikha",
+  "Is saal mahine-wise sales dikha",
+  "Stock ki CSV file do",
 ];
+
+/* Rows ko CSV bana ke download karo — wahi tareeka jo Reports page me hai */
+function downloadCSV({ name, rows }) {
+  if (!rows?.length) return;
+  const headers = Object.keys(rows[0]);
+  const esc = (v) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join("\n");
+
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${name}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 function Ask() {
   const [messages, setMessages] = useState([]);   // {role, content, toolsUsed?, model?}
@@ -49,6 +70,7 @@ function Ask() {
           content: res.answer,
           toolsUsed: res.toolsUsed || [],
           model: res.model,
+          exportData: res.exportData || null,
         },
       ]);
     } catch (err) {
@@ -108,6 +130,12 @@ function Ask() {
         {messages.map((m, i) => (
           <div key={i} className={`ask-msg ask-msg--${m.role}${m.isError ? " ask-msg--error" : ""}`}>
             <div className="ask-msg__body">{m.content}</div>
+            {m.exportData?.rows?.length > 0 && (
+              <button className="ask-dl" onClick={() => downloadCSV(m.exportData)}>
+                ⬇️ Download CSV
+                <span className="ask-dl__n">{m.exportData.rows.length} rows</span>
+              </button>
+            )}
             {m.toolsUsed?.length > 0 && (
               <div className="ask-msg__meta">
                 dekha gaya: {[...new Set(m.toolsUsed)].join(", ")}
