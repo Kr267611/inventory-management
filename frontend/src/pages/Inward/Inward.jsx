@@ -2,7 +2,27 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { inwardApi } from "../../Api/inwardApi";
 import { fetchAllMasters } from "../../Api/masterApi";
+import { designApi } from "../../Api/design";
 import InwardBulkImport from "./InwardBulkImport";
+
+/* Design ki photo cloud pe jaati hai, DB me sirf link.
+   .env me ye 2 daalo to upload chalu ho jayega:
+     REACT_APP_CLOUDINARY_CLOUD=your-cloud-name
+     REACT_APP_CLOUDINARY_PRESET=your-unsigned-preset  */
+const CLOUD = process.env.REACT_APP_CLOUDINARY_CLOUD || "";
+const PRESET = process.env.REACT_APP_CLOUDINARY_PRESET || "";
+const CAN_UPLOAD_PHOTO = Boolean(CLOUD && PRESET);
+
+async function uploadDesignPhoto(file) {
+  if (!CAN_UPLOAD_PHOTO) throw new Error("Upload setup nahi hai — Masters > Design me link paste karo.");
+  const body = new FormData();
+  body.append("file", file);
+  body.append("upload_preset", PRESET);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, { method: "POST", body });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error?.message || "Upload nahi ho paya");
+  return data.secure_url;
+}
 
 /* Inline icons */
 const Icon = {
@@ -559,7 +579,17 @@ export default function InwardEntry() {
               <MasterSelect value={form.fabricQuality} onChange={(v) => handle("fabricQuality", v)} options={masters.qualities} />
             </Field>
             <Field label="Design No">
-              <MasterSelect value={form.design} onChange={(v) => handle("design", v)} options={masters.designs} labelKey="designNo" />
+              <DesignPicker
+                value={form.design}
+                onChange={(v) => handle("design", v)}
+                options={masters.designs}
+                onPhotoSaved={(id, url) =>
+                  setMasters((m) => ({
+                    ...m,
+                    designs: m.designs.map((d) => (d._id === id ? { ...d, imageUrl: url } : d)),
+                  }))
+                }
+              />
             </Field>
             <Field label="Color">
               <MasterSelect value={form.defaultColor} onChange={(v) => handle("defaultColor", v)} options={masters.colors} />
@@ -927,6 +957,109 @@ export default function InwardEntry() {
       </div>
 
       <style>{`
+        /* ── Design picker (photo dekh ke chuno) ── */
+        .dp { position: relative; }
+        .dp__trigger {
+          width: 100%; display: flex; align-items: center; gap: 10px;
+          padding: 7px 10px; min-height: 42px;
+          border: 1px solid var(--inw-input-border); border-radius: 8px;
+          background: #fff; cursor: pointer; text-align: left; font: inherit;
+        }
+        .dp__trigger:hover { border-color: var(--inw-primary); }
+        .dp__thumb {
+          width: 28px; height: 28px; border-radius: 5px; object-fit: cover;
+          border: 1px solid var(--inw-border); flex-shrink: 0; background: #f8fafc;
+        }
+        .dp__thumb--none {
+          display: flex; align-items: center; justify-content: center;
+          color: var(--inw-muted); font-size: 12px;
+        }
+        .dp__label { flex: 1; font-size: 14px; color: var(--inw-text); }
+        .dp__label--placeholder { color: #9ca3af; }
+        .dp__chev { display: flex; color: var(--inw-muted); }
+        .dp__chev svg { width: 16px; height: 16px; }
+
+        .dp__backdrop { position: fixed; inset: 0; z-index: 60; }
+        .dp__panel {
+          position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 61;
+          background: #fff; border: 1px solid var(--inw-border); border-radius: 10px;
+          box-shadow: 0 12px 28px rgba(0,0,0,0.15);
+          padding: 12px; max-height: 380px; overflow-y: auto;
+          min-width: 320px;
+        }
+        .dp__search {
+          width: 100%; padding: 8px 10px; margin-bottom: 10px;
+          border: 1px solid var(--inw-input-border); border-radius: 6px;
+          font-size: 13px; font-family: inherit; outline: none;
+        }
+        .dp__search:focus { border-color: var(--inw-primary); }
+
+        .dp__grid {
+          display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px;
+        }
+        .dp__card {
+          border: 1px solid var(--inw-border); border-radius: 8px;
+          overflow: hidden; background: #fff; display: flex; flex-direction: column;
+        }
+        .dp__card--on { border-color: var(--inw-primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+        .dp__pick {
+          border: 0; background: none; padding: 0; cursor: pointer;
+          display: flex; flex-direction: column; font: inherit; width: 100%;
+        }
+        .dp__img {
+          width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #f8fafc;
+        }
+        .dp__img--none {
+          display: flex; align-items: center; justify-content: center;
+          color: #9ca3af; font-size: 10px; border-bottom: 1px dashed var(--inw-border);
+        }
+        .dp__no {
+          padding: 5px 4px; font-size: 11px; font-weight: 600;
+          color: var(--inw-text); text-align: center;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .dp__up {
+          display: block; padding: 4px; font-size: 10px; text-align: center;
+          background: #eff6ff; color: var(--inw-primary); cursor: pointer;
+          border-top: 1px solid var(--inw-border);
+        }
+        .dp__up:hover { background: #dbeafe; }
+        .dp__empty, .dp__hint {
+          grid-column: 1/-1; padding: 14px; text-align: center;
+          color: var(--inw-muted); font-size: 12px;
+        }
+        .dp__hint { border-top: 1px solid var(--inw-border); margin-top: 10px; }
+        .dp__err {
+          padding: 8px 10px; margin-bottom: 8px; border-radius: 6px;
+          background: #fef2f2; color: var(--inw-danger); font-size: 12px;
+        }
+
+        /* chune hue design ki photo — field ke neeche */
+        .dp__sel { margin-top: 8px; }
+        .dp__selimg {
+          width: 100%; max-height: 150px; object-fit: contain;
+          border: 1px solid var(--inw-border); border-radius: 8px;
+          background: #f8fafc; display: block;
+        }
+        .dp__selnone {
+          display: flex; align-items: center; justify-content: space-between; gap: 10px;
+          flex-wrap: wrap;
+          padding: 12px; border: 1px dashed var(--inw-input-border); border-radius: 8px;
+          background: #f8fafc; color: var(--inw-muted); font-size: 12px;
+        }
+        .dp__selbtn {
+          display: inline-block; margin-top: 6px;
+          padding: 6px 12px; border: 1px solid var(--inw-input-border); border-radius: 6px;
+          background: #fff; font-size: 12px; color: var(--inw-text); cursor: pointer;
+          white-space: nowrap;
+        }
+        .dp__selbtn:hover { background: #f8fafc; }
+        .dp__selnone .dp__selbtn { margin-top: 0; }
+        .dp__selbtn--primary {
+          background: var(--inw-primary); color: #fff; border-color: var(--inw-primary); font-weight: 500;
+        }
+        .dp__selbtn--primary:hover { background: var(--inw-primary-hover); }
+
         .inward-page, .inward-page * { box-sizing: border-box; }
         .inward-page {
           --inw-card: #ffffff;
@@ -1417,6 +1550,141 @@ function Field({ label, required, children }) {
 // }
 
 /* For master data objects with _id + name */
+/* Design chunne ka picker — number ki jagah PHOTO dekh ke chuno.
+   Jis design ki photo nahi hai, usme wahin se upload bhi ho jaata hai. */
+function DesignPicker({ value, onChange, options = [], onPhotoSaved }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [busyId, setBusyId] = useState(null);
+  const [err, setErr] = useState("");
+
+  const selected = options.find((o) => o._id === value);
+
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return s ? options.filter((o) => (o.designNo || "").toLowerCase().includes(s)) : options;
+  }, [options, q]);
+
+  async function attachPhoto(design, file) {
+    setBusyId(design._id);
+    setErr("");
+    try {
+      const url = await uploadDesignPhoto(file);
+      await designApi.update(design._id, { designNo: design.designNo, imageUrl: url });
+      onPhotoSaved?.(design._id, url);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="dp">
+      <button type="button" className="dp__trigger" onClick={() => setOpen((v) => !v)}>
+        {selected ? (
+          <>
+            {selected.imageUrl
+              ? <img src={selected.imageUrl} alt={selected.designNo} className="dp__thumb" />
+              : <span className="dp__thumb dp__thumb--none">?</span>}
+            <span className="dp__label">{selected.designNo}</span>
+          </>
+        ) : (
+          <span className="dp__label dp__label--placeholder">Design chuno...</span>
+        )}
+        <span className="dp__chev"><Icon.ChevronDown /></span>
+      </button>
+
+      {open && (
+        <>
+          <div className="dp__backdrop" onClick={() => setOpen(false)} />
+          <div className="dp__panel">
+            <input
+              className="dp__search"
+              placeholder="Design number se dhoondo..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              autoFocus
+            />
+
+            {err && <div className="dp__err">{err}</div>}
+
+            <div className="dp__grid">
+              {shown.length === 0 && <div className="dp__empty">Koi design nahi mila</div>}
+
+              {shown.map((o) => (
+                <div key={o._id} className={`dp__card${o._id === value ? " dp__card--on" : ""}`}>
+                  <button
+                    type="button"
+                    className="dp__pick"
+                    onClick={() => { onChange(o._id); setOpen(false); setQ(""); }}
+                  >
+                    {o.imageUrl
+                      ? <img src={o.imageUrl} alt={o.designNo} className="dp__img" />
+                      : <span className="dp__img dp__img--none">photo nahi</span>}
+                    <span className="dp__no">{o.designNo}</span>
+                  </button>
+
+                  {!o.imageUrl && (
+                    <label className="dp__up">
+                      {busyId === o._id ? "..." : "+ photo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        disabled={busyId === o._id}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) attachPhoto(o, f); e.target.value = ""; }}
+                      />
+                    </label>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {!CAN_UPLOAD_PHOTO && (
+              <div className="dp__hint">
+                Photo upload chalu karne ke liye Cloudinary ki free key chahiye — abhi Masters &gt; Design me link paste kar sakte ho.
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Design chunne ke baad photo yahan saamne dikhti hai */}
+      {selected && (
+        <div className="dp__sel">
+          {selected.imageUrl ? (
+            <>
+              <img src={selected.imageUrl} alt={selected.designNo} className="dp__selimg" />
+              <label className="dp__selbtn">
+                {busyId === selected._id ? "Upload ho raha hai..." : "Photo badlo"}
+                <input
+                  type="file" accept="image/*" hidden
+                  disabled={busyId === selected._id}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) attachPhoto(selected, f); e.target.value = ""; }}
+                />
+              </label>
+            </>
+          ) : (
+            <div className="dp__selnone">
+              <span>Is design ki photo nahi hai</span>
+              <label className="dp__selbtn dp__selbtn--primary">
+                {busyId === selected._id ? "Upload ho raha hai..." : "Photo upload karo"}
+                <input
+                  type="file" accept="image/*" hidden
+                  disabled={busyId === selected._id}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) attachPhoto(selected, f); e.target.value = ""; }}
+                />
+              </label>
+            </div>
+          )}
+          {err && <div className="dp__err">{err}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MasterSelect({ value, onChange, options = [], labelKey = "name" }) {
   return (
     <div className="inward-select-wrap">

@@ -56,7 +56,25 @@ const Icon = {
   ),
 };
 
-const EMPTY_FORM = { designNo: "" };
+const EMPTY_FORM = { designNo: "", imageUrl: "" };
+
+/* Cloudinary — .env me set karo to "Photo upload karo" button aa jayega.
+   Na ho to link paste karne ka option chalta rahega.
+     REACT_APP_CLOUDINARY_CLOUD=your-cloud-name
+     REACT_APP_CLOUDINARY_PRESET=your-unsigned-preset       */
+const CLOUD = process.env.REACT_APP_CLOUDINARY_CLOUD || "";
+const PRESET = process.env.REACT_APP_CLOUDINARY_PRESET || "";
+const CAN_UPLOAD = Boolean(CLOUD && PRESET);
+
+async function uploadToCloudinary(file) {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("upload_preset", PRESET);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, { method: "POST", body });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error?.message || "Upload nahi ho paya");
+  return data.secure_url;
+}
 
 const formatDate = (iso) => {
   if (!iso) return "-";
@@ -74,6 +92,8 @@ export default function DesignMaster() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
@@ -134,7 +154,7 @@ export default function DesignMaster() {
 
   const openEdit = (d) => {
     setEditingId(d._id);
-    setForm({ designNo: d.designNo || "" });
+    setForm({ designNo: d.designNo || "", imageUrl: d.imageUrl || "" });
     setDrawerOpen(true);
   };
 
@@ -222,6 +242,7 @@ export default function DesignMaster() {
             <thead>
               <tr>
                 <th>SR No.</th>
+                <th>Photo</th>
                 <th>Design Number</th>
                 <th>Created At</th>
                 <th className="design-th--center">Action</th>
@@ -229,13 +250,22 @@ export default function DesignMaster() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="4" className="design-td--empty">Loading...</td></tr>
+                <tr><td colSpan="5" className="design-td--empty">Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan="4" className="design-td--empty">No designs found</td></tr>
+                <tr><td colSpan="5" className="design-td--empty">No designs found</td></tr>
               ) : (
                 paginated.map((d, idx) => (
                   <tr key={d._id} className="design-tr">
                     <td>{(currentPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
+                    <td>
+                      {d.imageUrl ? (
+                        <a href={d.imageUrl} target="_blank" rel="noreferrer" title="Poori photo dekho">
+                          <img src={d.imageUrl} alt={d.designNo} className="design-thumb" />
+                        </a>
+                      ) : (
+                        <span className="design-thumb design-thumb--empty">—</span>
+                      )}
+                    </td>
                     <td className="design-td--name">{d.designNo}</td>
                     <td>{formatDate(d.createdAt)}</td>
                     <td>
@@ -310,6 +340,70 @@ export default function DesignMaster() {
                 autoFocus
               />
             </Field>
+          </section>
+
+          <section className="design-form-section">
+            <h3 className="design-form-section__title">Design Photo</h3>
+
+            {form.imageUrl ? (
+              <div className="design-photo">
+                <img src={form.imageUrl} alt={form.designNo || "design"} className="design-photo__img" />
+                <button
+                  type="button"
+                  className="design-photo__remove"
+                  onClick={() => handleField("imageUrl", "")}
+                >
+                  Photo hatao
+                </button>
+              </div>
+            ) : (
+              <div className="design-photo design-photo--empty">Abhi koi photo nahi</div>
+            )}
+
+            {CAN_UPLOAD && (
+              <Field label="Photo upload karo">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="design-input"
+                  disabled={uploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploading(true);
+                    setUploadErr("");
+                    try {
+                      handleField("imageUrl", await uploadToCloudinary(file));
+                    } catch (err) {
+                      setUploadErr(err.message);
+                    } finally {
+                      setUploading(false);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+              </Field>
+            )}
+
+            <Field
+              label="Photo ka link"
+              hint={CAN_UPLOAD ? "ya seedha link paste karo" : "Google Drive / kisi bhi photo ka link"}
+            >
+              <input
+                className="design-input"
+                placeholder="https://..."
+                value={form.imageUrl}
+                onChange={(e) => handleField("imageUrl", e.target.value.trim())}
+              />
+            </Field>
+
+            {uploading && <div className="design-photo__msg">Upload ho raha hai...</div>}
+            {uploadErr && <div className="design-photo__msg design-photo__msg--err">{uploadErr}</div>}
+            {!CAN_UPLOAD && (
+              <div className="design-photo__msg">
+                Seedha upload chalu karne ke liye Cloudinary ki free key <code>.env</code> me daalni hogi.
+              </div>
+            )}
           </section>
         </div>
 
@@ -543,6 +637,54 @@ export default function DesignMaster() {
           background: #fff;
         }
         .design-drawer__footer .design-btn { flex: 1; justify-content: center; }
+
+        /* PHOTO */
+        .design-thumb {
+          width: 44px; height: 44px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid var(--dm-border);
+          display: block;
+          background: #f8fafc;
+        }
+        .design-thumb--empty {
+          display: flex; align-items: center; justify-content: center;
+          color: var(--dm-muted); font-size: 16px;
+        }
+        .design-photo { margin-bottom: 14px; }
+        .design-photo__img {
+          width: 100%; max-height: 220px;
+          object-fit: contain;
+          border: 1px solid var(--dm-border);
+          border-radius: 8px;
+          background: #f8fafc;
+          display: block;
+        }
+        .design-photo__remove {
+          margin-top: 8px;
+          padding: 6px 12px;
+          border: 1px solid var(--dm-border);
+          background: #fff;
+          border-radius: 6px;
+          font-size: 12px;
+          color: var(--dm-danger);
+          cursor: pointer;
+        }
+        .design-photo__remove:hover { background: #fef2f2; border-color: #fecaca; }
+        .design-photo--empty {
+          padding: 28px;
+          text-align: center;
+          border: 1px dashed var(--dm-border);
+          border-radius: 8px;
+          color: var(--dm-muted);
+          font-size: 13px;
+          background: #f8fafc;
+        }
+        .design-photo__msg { font-size: 12px; color: var(--dm-muted); margin-top: 6px; }
+        .design-photo__msg--err { color: var(--dm-danger); }
+        .design-photo__msg code {
+          background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 11px;
+        }
 
         .design-form-section { margin-bottom: 24px; }
         .design-form-section:last-child { margin-bottom: 0; }
