@@ -39,7 +39,9 @@ async function chat({ messages, tools }) {
     );
   }
 
-  let lastErr;
+  // Har model ki apni galti alag rakhte hain — warna sirf aakhri wali
+  // dikhti hai aur asli wajah chhup jaati hai.
+  const failures = [];
 
   for (const model of MODELS) {
     try {
@@ -60,20 +62,22 @@ async function chat({ messages, tools }) {
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        const err = new Error(`[${model}] HTTP ${res.status} ${body.slice(0, 300)}`);
+        let why = body.slice(0, 200);
+        try { why = JSON.parse(body)?.error?.message || why; } catch { /* plain text */ }
 
         if (RETRYABLE.has(res.status)) {
-          console.warn(`AI: ${model} fail (${res.status}) — agla model try kar raha hoon`);
-          lastErr = err;
+          console.warn(`AI: ${model} fail (${res.status}: ${why}) — agla model try kar raha hoon`);
+          failures.push(`${model}: ${res.status === 429 ? "limit lag gayi" : res.status === 404 ? "model nahi mila" : `HTTP ${res.status}`} — ${why}`);
           continue;
         }
-        throw err; // auth/validation error — cascade se fayda nahi
+        // Auth/validation error — dusre model pe bhi wahi hoga
+        throw new Error(`AI nahi chala — ${why} (HTTP ${res.status})`);
       }
 
       const data = await res.json();
       const message = data?.choices?.[0]?.message;
       if (!message) {
-        lastErr = new Error(`[${model}] khaali response`);
+        failures.push(`${model}: khaali jawaab aaya`);
         continue;
       }
 
@@ -83,14 +87,21 @@ async function chat({ messages, tools }) {
       // Network error / timeout — agla model try karo
       if (e?.name === "TimeoutError" || e?.name === "AbortError" || e?.cause) {
         console.warn(`AI: ${model} — ${e.message}, agla model try kar raha hoon`);
-        lastErr = e;
+        failures.push(`${model}: ${e.name === "TimeoutError" ? "bahut time laga" : "connect nahi ho paya"}`);
         continue;
       }
       throw e;
     }
   }
 
-  throw new Error(`Saare AI models fail ho gaye. Aakhri error: ${lastErr?.message || "unknown"}`);
+  // Sabse aam wajah pehle bata do, technical detail baad me
+  const allLimited = failures.every((f) => f.includes("limit lag gayi"));
+  throw new Error(
+    (allLimited
+      ? "Groq ki free limit lag gayi hai — thodi der baad try karo."
+      : "AI abhi jawaab nahi de paya.") +
+      "\n\n" + failures.join("\n")
+  );
 }
 
 module.exports = { chat, isConfigured, MODELS, BASE_URL };
