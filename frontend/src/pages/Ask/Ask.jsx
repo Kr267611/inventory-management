@@ -69,14 +69,14 @@ const EXAMPLES = [
 ];
 
 /* Rows backend ko bhejo, PDF bankar wapas aati hai (pdfkit se) */
-async function downloadPDF({ name, rows }) {
+async function downloadPDF({ name, rows, total }) {
   const base = process.env.REACT_APP_API_URL ? `${process.env.REACT_APP_API_URL}/api` : "http://localhost:5000/api";
   const token = localStorage.getItem("token");
 
   const res = await fetch(`${base}/ask/pdf`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ title: name, rows }),
+    body: JSON.stringify({ title: name, rows, total }),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "PDF nahi ban paayi");
 
@@ -89,14 +89,16 @@ async function downloadPDF({ name, rows }) {
 }
 
 /* Rows ko CSV bana ke download karo — wahi tareeka jo Reports page me hai */
-function downloadCSV({ name, rows }) {
+function downloadCSV({ name, rows, total }) {
   if (!rows?.length) return;
   const headers = Object.keys(rows[0]);
   const esc = (v) => {
     const s = v === null || v === undefined ? "" : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join("\n");
+  const body = rows.map((r) => headers.map((h) => esc(r[h])).join(","));
+  if (total) body.push(headers.map((h) => esc(total[h])).join(","));   // sabse neeche TOTAL
+  const csv = [headers.join(","), ...body].join("\n");
 
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);

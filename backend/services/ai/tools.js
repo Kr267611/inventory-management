@@ -533,7 +533,7 @@ async function customer_ledger({ customer_name, from, to, format }) {
   let bal = 0;
   const ledger = rows.map((r) => {
     bal += r.debit - r.credit;
-    return { date: day(r.d), type: r.type, reference: r.ref, maal_diya: r.debit ? money(r.debit) : "-", paisa_aaya: r.credit ? money(r.credit) : "-", balance: money(bal) };
+    return { date: day(r.d), type: r.type, reference: r.ref, maal_diya: r2(r.debit), paisa_aaya: r2(r.credit), balance: r2(bal) };
   });
 
   return {
@@ -545,6 +545,7 @@ async function customer_ledger({ customer_name, from, to, format }) {
     __export: {
       name: `ledger-${c.name.replace(/[^a-zA-Z0-9]/g, "_")}`,
       rows: ledger,
+      total: totalRow(ledger, ["maal_diya", "paisa_aaya"]),
       format: String(format || "").toLowerCase() === "pdf" ? "pdf" : "csv",
     },
   };
@@ -575,6 +576,28 @@ async function compare_period({ from_a, to_a, from_b, to_b }) {
 }
 
 // 13. Excel/CSV file bana ke do — rows seedha DB se, model ne nahi likhe
+/* Report ke neeche TOTAL ki line.
+   ZAROORI: export ki rows me paisa PLAIN NUMBER hona chahiye ("6.87 cr" nahi) —
+   warna na yahan jod banta hai aur na Excel me SUM lagta hai. */
+function totalRow(rows, sumCols = []) {
+  if (!rows.length) return null;
+  const headers = Object.keys(rows[0]);
+  const out = {};
+  let labelPut = false;
+
+  headers.forEach((h) => {
+    if (sumCols.includes(h)) {
+      out[h] = r2(rows.reduce((a, r) => a + (Number(r[h]) || 0), 0));
+    } else if (!labelPut) {
+      out[h] = `TOTAL (${rows.length} rows)`;
+      labelPut = true;
+    } else {
+      out[h] = "";
+    }
+  });
+  return out;
+}
+
 async function export_data({ report, customer_name, from, to, status, format }) {
   const stamp = new Date().toISOString().slice(0, 10);
   // User ne PDF maanga ya CSV — model yahi decide karke bhejta hai
@@ -590,10 +613,10 @@ async function export_data({ report, customer_name, from, to, status, format }) 
       .map((s) => ({
         Date: day(s.saleDate), Invoice: s.invoiceNo, Customer: s.customer?.name || "",
         Bales: (s.items || []).map((i) => i.baleNo).join("; "),
-        Pcs: s.totalPcs, Qty: s.totalMeter, Amount: s.netAmount,
-        Paid: s.paidAmount, Balance: s.balanceDue, Status: s.paymentStatus,
+        Pcs: s.totalPcs, Qty: r2(s.totalMeter), Amount: r2(s.netAmount),
+        Paid: r2(s.paidAmount), Balance: r2(s.balanceDue), Status: s.paymentStatus,
       }));
-    return { report: "invoices", rows_count: rows.length, __export: { name: `invoices-${stamp}`, rows, format: fmt } };
+    return { report: "invoices", rows_count: rows.length, __export: { name: `invoices-${stamp}`, rows, format: fmt, total: totalRow(rows, ["Amount","Paid","Balance","Pcs","Qty"]) } };
   }
 
   if (report === "payments") {
@@ -604,9 +627,9 @@ async function export_data({ report, customer_name, from, to, status, format }) 
       .select("paymentId paymentDate customer amountReceived paymentMode remarks").lean())
       .map((p) => ({
         Date: day(p.paymentDate), PaymentID: p.paymentId, Customer: p.customer?.name || "",
-        Amount: p.amountReceived, Mode: p.paymentMode?.name || "", Remarks: p.remarks || "",
+        Amount: r2(p.amountReceived), Mode: p.paymentMode?.name || "", Remarks: p.remarks || "",
       }));
-    return { report: "payments", rows_count: rows.length, __export: { name: `payments-${stamp}`, rows, format: fmt } };
+    return { report: "payments", rows_count: rows.length, __export: { name: `payments-${stamp}`, rows, format: fmt, total: totalRow(rows, ["Amount"]) } };
   }
 
   if (report === "stock") {
@@ -617,13 +640,35 @@ async function export_data({ report, customer_name, from, to, status, format }) 
         Bale: b.baleNo, Fabric: b.fabric?.name || "", Design: b.design?.designNo || "", Color: b.color?.name || "",
         TotalPcs: b.totalPcs, AvailablePcs: b.availablePcs, AvailableQty: r2(b.availableMeter), Rate: b.rate,
       }));
-    return { report: "stock", rows_count: rows.length, __export: { name: `stock-${stamp}`, rows, format: fmt } };
+    return { report: "stock", rows_count: rows.length, __export: { name: `stock-${stamp}`, rows, format: fmt, total: totalRow(rows, ["TotalPcs","AvailablePcs","AvailableQty"]) } };
   }
 
   if (report === "outstanding") {
-    const top = await top_customers({ by: "outstanding", limit: 30 });
-    const rows = top.customers.map((c) => ({ Rank: c.rank, Customer: c.customer, Sales: c.sales, Received: c.received, Outstanding: c.outstanding, AdvanceExtra: c.advance_extra || "" }));
-    return { report: "outstanding", rows_count: rows.length, __export: { name: `outstanding-${stamp}`, rows, format: fmt } };
+    // Raw numbers se banate hain, formatted text se nahi — warna jod galat aata hai
+    const sales = new Map((await Sales.aggregate([{ $group: { _id: "$customer", v: { $sum: "$netAmount" } } }])).map((x) => [String(x._id), x.v]));
+    const pays = new Map((await Payment.aggregate([{ $group: { _id: "$customer", v: { $sum: "$amountReceived" } } }])).map((x) => [String(x._id), x.v]));
+    const names = new Map((await Customer.find().select("name").lean()).map((c) => [String(c._id), c.name]));
+
+    const rows = [...new Set([...sales.keys(), ...pays.keys()])]
+      .map((id) => {
+        const s = sales.get(id) || 0, p = pays.get(id) || 0;
+        return { name: names.get(id) || "?", s, p, bal: s - p };
+      })
+      .sort((a, b) => b.bal - a.bal)
+      .map((x, i) => ({
+        Rank: i + 1,
+        Customer: x.name,
+        Sales: r2(x.s),
+        Received: r2(x.p),
+        Outstanding: r2(Math.max(x.bal, 0)),
+        AdvanceExtra: r2(Math.max(-x.bal, 0)),
+      }));
+
+    return {
+      report: "outstanding",
+      rows_count: rows.length,
+      __export: { name: `outstanding-${stamp}`, rows, format: fmt, total: totalRow(rows, ["Sales", "Received", "Outstanding", "AdvanceExtra"]) },
+    };
   }
 
   return { error: `"${report}" report nahi hai. Ye chal sakti hain: invoices, payments, stock, outstanding.` };

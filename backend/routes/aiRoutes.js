@@ -14,6 +14,7 @@ router.post("/pdf", express.json({ limit: "4mb" }), (req, res) => {
   try {
     const title = String(req.body?.title || "Report").slice(0, 80);
     const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    const total = req.body?.total && typeof req.body.total === "object" ? req.body.total : null;
     if (!rows.length) return res.status(400).json({ message: "Report khaali hai." });
 
     const headers = Object.keys(rows[0]);
@@ -30,6 +31,13 @@ router.post("/pdf", express.json({ limit: "4mb" }), (req, res) => {
 
     // Number wale column dayein taraf — padhne me aasaan
     const isNum = headers.map((h) => rows.every((r) => r[h] === "" || r[h] == null || !isNaN(Number(String(r[h]).replace(/[₹,\sRs]/g, "")))));
+
+    // CSV me plain number rehta hai (Excel me SUM lag sake), par PDF padhne
+    // ke liye hai — isliye yahan comma laga dete hain.
+    const cell = (v) => {
+      if (v === null || v === undefined || v === "") return "";
+      return typeof v === "number" ? v.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : String(v);
+    };
 
     doc.fontSize(15).font("Helvetica-Bold").text(title, left, doc.y);
     doc.fontSize(8).font("Helvetica").fillColor("#666")
@@ -54,12 +62,27 @@ router.post("/pdf", express.json({ limit: "4mb" }), (req, res) => {
       const y = doc.y;
       if (n % 2) doc.rect(left, y - 1, usable, 13).fill("#fafafa").fillColor("#000");
       headers.forEach((h, i) =>
-        doc.text(r[h] === null || r[h] === undefined ? "" : String(r[h]), left + i * colW + 3, y + 2, {
+        doc.text(cell(r[h]), left + i * colW + 3, y + 2, {
           width: colW - 6, align: isNum[i] ? "right" : "left", lineBreak: false, ellipsis: true,
         })
       );
       doc.y = y + 13;
     });
+
+    // TOTAL ki line — sabse neeche, bold, upar lakeer ke saath
+    if (total) {
+      if (doc.y > bottom - 8) { doc.addPage(); drawHead(); }
+      const y = doc.y + 2;
+      doc.moveTo(left, y).lineTo(left + usable, y).lineWidth(0.8).stroke("#334155");
+      doc.rect(left, y + 1, usable, 15).fill("#f1f5f9").fillColor("#000");
+      doc.font("Helvetica-Bold").fontSize(8);
+      headers.forEach((h, i) =>
+        doc.text(cell(total[h]), left + i * colW + 3, y + 5, {
+          width: colW - 6, align: isNum[i] ? "right" : "left", lineBreak: false, ellipsis: true,
+        })
+      );
+      doc.y = y + 18;
+    }
 
     doc.end();
   } catch (err) {
