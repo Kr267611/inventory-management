@@ -116,6 +116,29 @@
   color: #b91c1c;
 }
 
+/* ── graph ── */
+.ask-chart {
+  width: 100%;
+  min-width: 300px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 12px 6px;
+  margin-top: 2px;
+}
+
+.ask-chart__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 10px 4px;
+}
+
+/* graph wale jawaab ko poori chaudai — warna bars dab jaate hain */
+.ask-msg--assistant:has(.ask-chart) { max-width: 100%; width: 100%; }
+
+.ask-chart .recharts-cartesian-axis-tick text { fill: #6b7280; }
+
 /* ── download button ── */
 .ask-dl {
   align-self: flex-start;
@@ -133,10 +156,26 @@
   transition: all 0.15s;
 }
 
-.ask-dl:hover {
+.ask-dl:hover:not(:disabled) {
   background: #d1fae5;
   border-color: #34d399;
 }
+
+.ask-dl:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* PDF wala laal — CSV se alag pehchan */
+.ask-dl--pdf {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.ask-dl--pdf:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+.ask-dl--pdf .ask-dl__n { color: #dc2626; }
 
 .ask-dl__n {
   font-weight: 400;

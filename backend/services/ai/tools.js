@@ -78,7 +78,7 @@ async function totalsFor(customerId) {
 /* ──────── tool implementations ──────── */
 
 // 1. Poore business ke totals — Outstanding = Sales − Received (wahi formula jo /payment/stats me hai)
-async function business_totals() {
+async function business_totals({ chart } = {}) {
   const [s] = await Sales.aggregate([
     { $group: { _id: null, sales: { $sum: "$netAmount" }, invoices: { $sum: 1 } } },
   ]);
@@ -91,7 +91,7 @@ async function business_totals() {
   const received = r2(p?.received || 0);
   const outstanding = r2(Math.max(sales - received, 0));
 
-  return {
+  const out = {
     total_sales: money(sales),
     total_received: money(received),
     total_outstanding: money(outstanding),
@@ -101,6 +101,18 @@ async function business_totals() {
     invoices_by_status: Object.fromEntries(byStatus.map((x) => [x._id || "Unknown", x.n])),
     raw: { sales, received, outstanding },
   };
+
+  if (chart) {
+    out.__chart = {
+      type: "pie",
+      title: `Total Sales ${money(sales)} — kitna aaya, kitna baaki`,
+      data: [
+        { name: "Paisa aaya", value: received, color: "#10b981" },
+        { name: "Baaki", value: outstanding, color: "#f59e0b" },
+      ],
+    };
+  }
+  return out;
 }
 
 // 2. Ek customer ka poora hisaab
@@ -157,9 +169,23 @@ async function search_invoices({ customer_name, invoice_no, from, to, status, li
 
   const matched = await Sales.countDocuments(q);
 
+  // Grand total — jo dikha rahe hain uska nahi, POORE match ka
+  const [tot] = await Sales.aggregate([
+    { $match: q },
+    { $group: { _id: null, amt: { $sum: "$netAmount" }, paid: { $sum: "$paidAmount" }, bal: { $sum: "$balanceDue" }, pcs: { $sum: "$totalPcs" }, mtr: { $sum: "$totalMeter" } } },
+  ]);
+
   return {
     matched,
     showing: rows.length,
+    grand_total: {
+      invoices: matched,
+      amount: money(tot?.amt || 0),
+      paid: money(tot?.paid || 0),
+      balance: money(tot?.bal || 0),
+      pcs: tot?.pcs || 0,
+      qty: r2(tot?.mtr || 0),
+    },
     invoices: rows.map((s) => ({
       invoice: s.invoiceNo,
       date: day(s.saleDate),
@@ -185,12 +211,15 @@ async function payment_history({ customer_name, limit }) {
     .populate("paymentMode", "name")
     .select("paymentId paymentDate amountReceived paymentMode remarks status");
 
-  const total = rows.reduce((a, p) => a + (p.amountReceived || 0), 0);
+  const [tot] = await Payment.aggregate([
+    { $match: { customer: res.customer._id } },
+    { $group: { _id: null, amt: { $sum: "$amountReceived" }, n: { $sum: 1 } } },
+  ]);
 
   return {
     customer: res.customer.name,
     showing: rows.length,
-    total_shown: money(total),
+    grand_total: { payments: tot?.n || 0, amount: money(tot?.amt || 0) },
     payments: rows.map((p) => ({
       id: p.paymentId,
       date: day(p.paymentDate),
@@ -202,7 +231,7 @@ async function payment_history({ customer_name, limit }) {
 }
 
 // 5. Top customers
-async function top_customers({ by, limit }) {
+async function top_customers({ by, limit, chart }) {
   const key = ["outstanding", "sales", "received"].includes(by) ? by : "outstanding";
   const n = Math.min(Math.max(Number(limit) || 10, 1), 30);
 
@@ -221,9 +250,16 @@ async function top_customers({ by, limit }) {
 
   rows.sort((a, b) => b[key] - a[key]);
 
-  return {
+  const top = rows.slice(0, n);
+  const out = {
     sorted_by: key,
-    customers: rows.slice(0, n).map((x, i) => ({
+    grand_total: {
+      customers: rows.length,
+      sales: money(rows.reduce((a, x) => a + x.sales, 0)),
+      received: money(rows.reduce((a, x) => a + x.received, 0)),
+      outstanding: money(rows.reduce((a, x) => a + Math.max(x.outstanding, 0), 0)),
+    },
+    customers: top.map((x, i) => ({
       rank: i + 1,
       customer: x.name,
       sales: money(x.sales),
@@ -232,6 +268,17 @@ async function top_customers({ by, limit }) {
       advance_extra: x.outstanding < 0 ? money(-x.outstanding) : null,
     })),
   };
+
+  if (chart) {
+    const label = key === "sales" ? "Sales" : key === "received" ? "Paisa aaya" : "Baaki";
+    out.__chart = {
+      type: "hbar",
+      title: `Top ${top.length} customers — ${label}`,
+      series: [{ key: label, color: key === "outstanding" ? "#f59e0b" : key === "received" ? "#10b981" : "#8b5cf6" }],
+      data: top.map((x) => ({ name: x.name, [label]: r2(Math.abs(x[key])) })),
+    };
+  }
+  return out;
 }
 
 // 6. Stock check
@@ -409,7 +456,7 @@ async function inward_search({ bale_no, voucher_no, from, to, limit }) {
 }
 
 // 10. Mahine-wise report
-async function monthly_report({ year, months }) {
+async function monthly_report({ year, months, chart }) {
   const y = Number(year) || new Date().getFullYear();
   const start = new Date(Date.UTC(y, 0, 1)), end = new Date(Date.UTC(y + 1, 0, 1));
 
@@ -435,16 +482,35 @@ async function monthly_report({ year, months }) {
     payments: pM.get(m)?.n || 0,
   }));
 
-  return {
+  const out = {
     year: y,
     months: rows,
-    year_total_sales: money(s.reduce((a, x) => a + x.amt, 0)),
-    year_total_received: money(p.reduce((a, x) => a + x.amt, 0)),
+    grand_total: {
+      sales: money(s.reduce((a, x) => a + x.amt, 0)),
+      received: money(p.reduce((a, x) => a + x.amt, 0)),
+      invoices: s.reduce((a, x) => a + x.n, 0),
+    },
   };
+
+  if (chart) {
+    out.__chart = {
+      type: "bar",
+      title: `${y} — mahine-wise`,
+      xKey: "name",
+      series: [
+        { key: "Sales", color: "#8b5cf6" },
+        { key: "Paisa aaya", color: "#10b981" },
+      ],
+      data: want
+        .filter((m) => sM.has(m) || pM.has(m))
+        .map((m) => ({ name: nm[m - 1], Sales: r2(sM.get(m)?.amt || 0), "Paisa aaya": r2(pM.get(m)?.amt || 0) })),
+    };
+  }
+  return out;
 }
 
 // 11. Customer ka poora ledger — date-wise, running balance ke saath
-async function customer_ledger({ customer_name, from, to }) {
+async function customer_ledger({ customer_name, from, to, format }) {
   const res = await resolveOne(customer_name);
   if (res.error) return res;
   const c = res.customer;
@@ -476,7 +542,11 @@ async function customer_ledger({ customer_name, from, to }) {
     ledger,
     final_balance: money(bal),
     matlab: bal > 0 ? `${c.name} pe ${money(bal)} baaki hai` : bal < 0 ? `${c.name} ka ${money(-bal)} extra jama hai` : "Hisaab barabar hai",
-    __export: { name: `ledger-${c.name.replace(/[^a-zA-Z0-9]/g, "_")}`, rows: ledger },
+    __export: {
+      name: `ledger-${c.name.replace(/[^a-zA-Z0-9]/g, "_")}`,
+      rows: ledger,
+      format: String(format || "").toLowerCase() === "pdf" ? "pdf" : "csv",
+    },
   };
 }
 
@@ -505,8 +575,10 @@ async function compare_period({ from_a, to_a, from_b, to_b }) {
 }
 
 // 13. Excel/CSV file bana ke do — rows seedha DB se, model ne nahi likhe
-async function export_data({ report, customer_name, from, to, status }) {
+async function export_data({ report, customer_name, from, to, status, format }) {
   const stamp = new Date().toISOString().slice(0, 10);
+  // User ne PDF maanga ya CSV — model yahi decide karke bhejta hai
+  const fmt = String(format || "").toLowerCase() === "pdf" ? "pdf" : "csv";
 
   if (report === "invoices") {
     const q = {};
@@ -521,7 +593,7 @@ async function export_data({ report, customer_name, from, to, status }) {
         Pcs: s.totalPcs, Qty: s.totalMeter, Amount: s.netAmount,
         Paid: s.paidAmount, Balance: s.balanceDue, Status: s.paymentStatus,
       }));
-    return { report: "invoices", rows_count: rows.length, __export: { name: `invoices-${stamp}`, rows } };
+    return { report: "invoices", rows_count: rows.length, __export: { name: `invoices-${stamp}`, rows, format: fmt } };
   }
 
   if (report === "payments") {
@@ -534,7 +606,7 @@ async function export_data({ report, customer_name, from, to, status }) {
         Date: day(p.paymentDate), PaymentID: p.paymentId, Customer: p.customer?.name || "",
         Amount: p.amountReceived, Mode: p.paymentMode?.name || "", Remarks: p.remarks || "",
       }));
-    return { report: "payments", rows_count: rows.length, __export: { name: `payments-${stamp}`, rows } };
+    return { report: "payments", rows_count: rows.length, __export: { name: `payments-${stamp}`, rows, format: fmt } };
   }
 
   if (report === "stock") {
@@ -545,13 +617,13 @@ async function export_data({ report, customer_name, from, to, status }) {
         Bale: b.baleNo, Fabric: b.fabric?.name || "", Design: b.design?.designNo || "", Color: b.color?.name || "",
         TotalPcs: b.totalPcs, AvailablePcs: b.availablePcs, AvailableQty: r2(b.availableMeter), Rate: b.rate,
       }));
-    return { report: "stock", rows_count: rows.length, __export: { name: `stock-${stamp}`, rows } };
+    return { report: "stock", rows_count: rows.length, __export: { name: `stock-${stamp}`, rows, format: fmt } };
   }
 
   if (report === "outstanding") {
     const top = await top_customers({ by: "outstanding", limit: 30 });
     const rows = top.customers.map((c) => ({ Rank: c.rank, Customer: c.customer, Sales: c.sales, Received: c.received, Outstanding: c.outstanding, AdvanceExtra: c.advance_extra || "" }));
-    return { report: "outstanding", rows_count: rows.length, __export: { name: `outstanding-${stamp}`, rows } };
+    return { report: "outstanding", rows_count: rows.length, __export: { name: `outstanding-${stamp}`, rows, format: fmt } };
   }
 
   return { error: `"${report}" report nahi hai. Ye chal sakti hain: invoices, payments, stock, outstanding.` };
@@ -565,8 +637,8 @@ const definitions = [
     function: {
       name: "business_totals",
       description:
-        "Poore business ke totals: total sales, total paisa aaya, total outstanding (baaki), invoice count, customer count, aur invoice status breakdown. Jab bhi overall/total/kul ka sawaal ho ye chalao.",
-      parameters: { type: "object", properties: {}, required: [] },
+        "Poore business ke totals: total sales, total paisa aaya, total outstanding (baaki), invoice count, customer count, aur invoice status breakdown. Jab bhi overall/total/kul ka sawaal ho ye chalao. Graph maanga ho to chart:true.",
+      parameters: { type: "object", properties: { chart: { type: "boolean", description: "User graph/chart maange to true" } }, required: [] },
     },
   },
   {
@@ -628,6 +700,7 @@ const definitions = [
         properties: {
           by: { type: "string", enum: ["outstanding", "sales", "received"], description: "default outstanding" },
           limit: { type: "integer", description: "default 10, max 30" },
+          chart: { type: "boolean", description: "User graph/chart maange to true" },
         },
         required: [],
       },
@@ -701,6 +774,7 @@ const definitions = [
         properties: {
           year: { type: "integer", description: "saal, jaise 2026 (default: is saal)" },
           months: { type: "array", items: { type: "integer" }, description: "sirf kuch mahine chahiye to [6,7]" },
+          chart: { type: "boolean", description: "User graph/chart maange to true" },
         },
         required: [],
       },
@@ -718,6 +792,7 @@ const definitions = [
           customer_name: { type: "string" },
           from: { type: "string", description: "YYYY-MM-DD" },
           to: { type: "string", description: "YYYY-MM-DD" },
+          format: { type: "string", enum: ["csv", "pdf"], description: "User ne PDF maanga to 'pdf', warna 'csv'" },
         },
         required: ["customer_name"],
       },
@@ -746,11 +821,12 @@ const definitions = [
     function: {
       name: "export_data",
       description:
-        "Excel/CSV file bana ke do. Jab user 'CSV do', 'Excel me chahiye', 'file bana do', 'download karna hai' kahe tab ye chalao. Rows seedha database se aati hain.",
+        "Report ki file bana ke do — CSV/Excel ya PDF. Jab user 'CSV do', 'Excel me chahiye', 'PDF me chahiye', 'file bana do', 'download karna hai', 'print karna hai' kahe tab ye chalao. Rows seedha database se aati hain.",
       parameters: {
         type: "object",
         properties: {
           report: { type: "string", enum: ["invoices", "payments", "stock", "outstanding"], description: "kaunsi report chahiye" },
+          format: { type: "string", enum: ["csv", "pdf"], description: "User ne PDF/print maanga to 'pdf', warna 'csv' (default)" },
           customer_name: { type: "string", description: "sirf ek customer ka chahiye to" },
           from: { type: "string", description: "YYYY-MM-DD" },
           to: { type: "string", description: "YYYY-MM-DD" },
