@@ -77,6 +77,10 @@ app.use("/api/payment", paymentRoutes);
 const aiRoutes = require("./routes/aiRoutes");
 app.use("/api/ask", aiRoutes);
 
+// Design photo upload (Cloudinary signature)
+const photoRoutes = require("./routes/photoRoutes");
+app.use("/api/photo", photoRoutes);
+
 // test route
 app.get("/", (req, res) => {
   res.send("API is running...");

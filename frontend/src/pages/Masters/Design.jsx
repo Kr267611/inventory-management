@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {designApi} from "../../Api/design";
+import { api } from "../../Api/api";
 import { isAdmin } from "../../utils/auth";
 // 👆 baad me designApi banao to swap kar dena
 
@@ -58,19 +59,41 @@ const Icon = {
 
 const EMPTY_FORM = { designNo: "", imageUrl: "" };
 
-/* Cloudinary — .env me set karo to "Photo upload karo" button aa jayega.
-   Na ho to link paste karne ka option chalta rahega.
-     REACT_APP_CLOUDINARY_CLOUD=your-cloud-name
-     REACT_APP_CLOUDINARY_PRESET=your-unsigned-preset       */
-const CLOUD = process.env.REACT_APP_CLOUDINARY_CLOUD || "";
-const PRESET = process.env.REACT_APP_CLOUDINARY_PRESET || "";
-const CAN_UPLOAD = Boolean(CLOUD && PRESET);
+/* Photo seedha Cloudinary jaati hai. Backend pehle ek signature deta hai
+   (secret backend me hi rehta hai), phir browser photo bhejta hai.
+   DB me sirf photo ka link save hota hai. */
+
+// Phone ki photo 4-5 MB hoti hai — bhejne se pehle chhoti kar do.
+// Design dekhne ke liye 1600px kaafi hai, upload bhi jaldi hota hai.
+function shrinkPhoto(file) {
+  return new Promise((resolve) => {
+    if (!/^image\//.test(file.type) || file.type === "image/gif") return resolve(file);
+    const img = new Image();
+    const src = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(src);
+      const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+      if (scale === 1 && file.size < 1.5e6) return resolve(file);
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob((b) => resolve(b && b.size < file.size ? b : file), "image/jpeg", 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(src); resolve(file); };
+    img.src = src;
+  });
+}
 
 async function uploadToCloudinary(file) {
+  const s = await api.get("/photo/sign");
   const body = new FormData();
-  body.append("file", file);
-  body.append("upload_preset", PRESET);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, { method: "POST", body });
+  body.append("file", await shrinkPhoto(file));
+  body.append("api_key", s.apiKey);
+  body.append("timestamp", s.timestamp);
+  body.append("folder", s.folder);
+  body.append("signature", s.signature);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${s.cloud}/image/upload`, { method: "POST", body });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message || "Upload nahi ho paya");
   return data.secure_url;
@@ -360,35 +383,30 @@ export default function DesignMaster() {
               <div className="design-photo design-photo--empty">Abhi koi photo nahi</div>
             )}
 
-            {CAN_UPLOAD && (
-              <Field label="Photo upload karo">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="design-input"
-                  disabled={uploading}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setUploading(true);
-                    setUploadErr("");
-                    try {
-                      handleField("imageUrl", await uploadToCloudinary(file));
-                    } catch (err) {
-                      setUploadErr(err.message);
-                    } finally {
-                      setUploading(false);
-                      e.target.value = "";
-                    }
-                  }}
-                />
-              </Field>
-            )}
+            <Field label="Photo upload karo">
+              <input
+                type="file"
+                accept="image/*"
+                className="design-input"
+                disabled={uploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploading(true);
+                  setUploadErr("");
+                  try {
+                    handleField("imageUrl", await uploadToCloudinary(file));
+                  } catch (err) {
+                    setUploadErr(err.message);
+                  } finally {
+                    setUploading(false);
+                    e.target.value = "";
+                  }
+                }}
+              />
+            </Field>
 
-            <Field
-              label="Photo ka link"
-              hint={CAN_UPLOAD ? "ya seedha link paste karo" : "Google Drive / kisi bhi photo ka link"}
-            >
+            <Field label="Photo ka link" hint="ya seedha link paste karo">
               <input
                 className="design-input"
                 placeholder="https://..."
@@ -399,11 +417,6 @@ export default function DesignMaster() {
 
             {uploading && <div className="design-photo__msg">Upload ho raha hai...</div>}
             {uploadErr && <div className="design-photo__msg design-photo__msg--err">{uploadErr}</div>}
-            {!CAN_UPLOAD && (
-              <div className="design-photo__msg">
-                Seedha upload chalu karne ke liye Cloudinary ki free key <code>.env</code> me daalni hogi.
-              </div>
-            )}
           </section>
         </div>
 
