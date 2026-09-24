@@ -139,7 +139,7 @@ export default function DesignMaster() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return designs;
-    return designs.filter((d) => d.name.toLowerCase().includes(q));
+    return designs.filter((d) => String(d.designNo || "").toLowerCase().includes(q));
   }, [designs, search]);
 
   /* ──────── PAGINATION ──────── */
