@@ -15,6 +15,24 @@ function getAuthHeaders() {
 }
 
 /**
+ * Kuch save / badla / delete hua to sunne walon ko batao.
+ * masterApi isi se apni yaad rakhi hui lists saaf karta hai.
+ */
+const writeListeners = new Set();
+
+export function onWrite(fn) {
+  writeListeners.add(fn);
+  return () => writeListeners.delete(fn);
+}
+
+function notifyWrite(method) {
+  if (method === "GET") return;
+  writeListeners.forEach((fn) => {
+    try { fn(); } catch { /* ek listener ki galti se request na ruke */ }
+  });
+}
+
+/**
  * Internal request function — saare GET/POST/PUT/DELETE iske through chalte hain
  */
 async function request(endpoint, options = {}) {
@@ -40,7 +58,10 @@ async function request(endpoint, options = {}) {
     const res = await fetch(url, config);
 
     // 204 No Content (DELETE me aksar aata hai) — body khaali hoti hai
-    if (res.status === 204) return null;
+    if (res.status === 204) {
+      notifyWrite(config.method);
+      return null;
+    }
 
     // 401 Unauthorized — token expired/invalid, clear kar do
     if (res.status === 401) {
@@ -68,6 +89,7 @@ async function request(endpoint, options = {}) {
         : `HTTP ${res.status} - ${res.statusText}`;
       throw new Error(message);
     }
+    notifyWrite(config.method);
     return data;
   } catch (err) {
     // Network error ya parsing error

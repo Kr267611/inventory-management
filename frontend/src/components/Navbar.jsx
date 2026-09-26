@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { userApi } from "../Api/userApi";
 import { salesApi } from "../Api/sales";
 import { inventoryApi } from "../Api/inventoryApi"; // 🔧 adjust path if different
+import { clearMastersCache } from "../Api/masterApi";
 import "./Navbar.css";
 
 /* ───────── ICONS ───────── */
@@ -164,6 +165,7 @@ function Navbar({ toggleSidebar }) {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    clearMastersCache(); // agla user is computer pe purani lists na dekhe
     setProfileOpen(false);
     navigate("/");
   };
